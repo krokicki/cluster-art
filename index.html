@@ -422,7 +422,7 @@
             'USER',
             'HOSTNAME',
             'ROW',
-            'CPU/GPU',
+            'HARDWARE',
             'GPU TYPE',
             'UTILIZATION',
             'SLOT STATUS',
@@ -435,7 +435,7 @@
 
         // Resource model
         class Resource {
-            constructor(hostname, type, index, user, hostData) {
+            constructor(hostname, type, index, user, hostData, hardwareGroup) {
                 this.hostname = hostname;
                 this.type = type; // 'cpu' or 'gpu'
                 this.index = index; // Index within the host
@@ -448,6 +448,7 @@
                 this.utilization = hostData?.utilization || 0;
                 this.status = hostData?.status || 'unknown';
                 this.load = hostData?.load || {};
+                this.hardwareGroup = hardwareGroup || 'Unknown';
             }
 
             get isIdle() {
@@ -667,29 +668,47 @@
             }
         }
 
-        // Mode 4: By Resource Type (CPU/GPU)
+        // Mode 4: By Hardware Group
         class TypeColorStrategy extends ColorStrategy {
             constructor() {
                 super();
-                this.colorMap.set('cpu', '#4488ff'); // Blue
-                this.colorMap.set('gpu', '#ff8844'); // Orange
+                // Generate distinct colors for hardware groups
+                const hardwareGroups = [
+                    'CPU + T4',
+                    'CPU + L4',
+                    'CPU + 8GPU L4',
+                    '8GPU L4',
+                    '4GPU A100',
+                    '8GPU H100',
+                    '8GPU H200',
+                    'GH200',
+                    '7GPU L4',
+                    'Unknown'
+                ];
+
+                const colors = generateDistinctColors(hardwareGroups.length);
+                hardwareGroups.forEach((group, idx) => {
+                    this.colorMap.set(group, colors[idx]);
+                });
             }
 
             getColor(resource) {
-                return this.colorMap.get(resource.type);
+                return this.colorMap.get(resource.hardwareGroup) || '#2a2a2a';
             }
 
             getLegendItems(resources) {
                 const counts = new Map();
                 resources.forEach(r => {
-                    counts.set(r.type, (counts.get(r.type) || 0) + 1);
+                    counts.set(r.hardwareGroup, (counts.get(r.hardwareGroup) || 0) + 1);
                 });
 
-                return ['cpu', 'gpu'].map(type => ({
-                    label: type.toUpperCase(),
-                    color: this.colorMap.get(type),
-                    count: counts.get(type) || 0
-                }));
+                return Array.from(counts.keys())
+                    .sort()
+                    .map(group => ({
+                        label: group,
+                        color: this.colorMap.get(group),
+                        count: counts.get(group)
+                    }));
             }
         }
 
@@ -912,20 +931,32 @@
                 const response = await fetch('cluster-status.json');
                 const data = await response.json();
 
+                // Create hostname to hardware group mapping
+                const hostnameToGroup = new Map();
+                if (data.hardwareGroups) {
+                    Object.entries(data.hardwareGroups).forEach(([groupName, hostnames]) => {
+                        hostnames.forEach(hostname => {
+                            hostnameToGroup.set(hostname, groupName);
+                        });
+                    });
+                }
+
                 // Extract resources from hostDetails
                 const allResources = [];
                 const allUsers = [];
 
                 data.hostDetails.forEach(host => {
+                    const hardwareGroup = hostnameToGroup.get(host.hostname) || 'Unknown';
+
                     // Add CPU resources
                     host.cpuSlots.forEach((user, idx) => {
-                        allResources.push(new Resource(host.hostname, 'cpu', idx, user, host));
+                        allResources.push(new Resource(host.hostname, 'cpu', idx, user, host, hardwareGroup));
                         if (user && user !== '') allUsers.push(user);
                     });
 
                     // Add GPU resources
                     host.gpuSlots.forEach((user, idx) => {
-                        allResources.push(new Resource(host.hostname, 'gpu', idx, user, host));
+                        allResources.push(new Resource(host.hostname, 'gpu', idx, user, host, hardwareGroup));
                         if (user && user !== '') allUsers.push(user);
                     });
                 });
@@ -1230,6 +1261,10 @@
                         <div class="modal-info-row">
                             <div class="modal-label">ROW:</div>
                             <div class="modal-value">${resource.row}</div>
+                        </div>
+                        <div class="modal-info-row">
+                            <div class="modal-label">HARDWARE:</div>
+                            <div class="modal-value">${resource.hardwareGroup}</div>
                         </div>
                         <div class="modal-info-row">
                             <div class="modal-label">SLOT:</div>
