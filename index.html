@@ -206,7 +206,7 @@
             border: 4px solid #00ff00;
             box-shadow: 12px 12px 0px rgba(0, 0, 0, 0.9);
             padding: 24px;
-            max-width: 600px;
+            max-width: 1200px;
             max-height: 80vh;
             overflow-y: auto;
             font-family: 'Press Start 2P', monospace;
@@ -225,6 +225,23 @@
         #modal-title {
             font-size: 12px;
             color: #ffff00;
+        }
+
+        #modal-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 40px;
+        }
+
+        @media (max-width: 768px) {
+            #modal {
+                max-width: 90vw;
+                width: 90vw;
+            }
+
+            #modal-content {
+                grid-template-columns: 1fr;
+            }
         }
 
 
@@ -1140,60 +1157,64 @@
                 ? '<span class="status-badge idle">IDLE</span>'
                 : '<span class="status-badge in-use">IN-USE</span>';
 
-            let content = `
-                <div class="modal-section">
-                    <div class="modal-section-title">▸ BASIC INFO</div>
-                    <div class="modal-info-row">
-                        <div class="modal-label">TYPE:</div>
-                        <div class="modal-value">${resource.type.toUpperCase()}</div>
+            // Column 1: Basic info and host status
+            let column1 = `
+                <div>
+                    <div class="modal-section">
+                        <div class="modal-section-title">▸ BASIC INFO</div>
+                        <div class="modal-info-row">
+                            <div class="modal-label">TYPE:</div>
+                            <div class="modal-value">${resource.type.toUpperCase()}</div>
+                        </div>
+                        <div class="modal-info-row">
+                            <div class="modal-label">HOSTNAME:</div>
+                            <div class="modal-value">${resource.hostname}</div>
+                        </div>
+                        <div class="modal-info-row">
+                            <div class="modal-label">ROW:</div>
+                            <div class="modal-value">${resource.row}</div>
+                        </div>
+                        <div class="modal-info-row">
+                            <div class="modal-label">SLOT:</div>
+                            <div class="modal-value">#${resource.index}</div>
+                        </div>
+                        <div class="modal-info-row">
+                            <div class="modal-label">STATUS:</div>
+                            <div class="modal-value">${statusBadge}</div>
+                        </div>
+                        ${resource.user ? `
+                        <div class="modal-info-row">
+                            <div class="modal-label">USER:</div>
+                            <div class="modal-value">${resource.user}</div>
+                        </div>
+                        ` : ''}
+                        ${resource.gpuType ? `
+                        <div class="modal-info-row">
+                            <div class="modal-label">GPU TYPE:</div>
+                            <div class="modal-value">${resource.gpuType}</div>
+                        </div>
+                        ` : ''}
                     </div>
-                    <div class="modal-info-row">
-                        <div class="modal-label">HOSTNAME:</div>
-                        <div class="modal-value">${resource.hostname}</div>
-                    </div>
-                    <div class="modal-info-row">
-                        <div class="modal-label">ROW:</div>
-                        <div class="modal-value">${resource.row}</div>
-                    </div>
-                    <div class="modal-info-row">
-                        <div class="modal-label">SLOT:</div>
-                        <div class="modal-value">#${resource.index}</div>
-                    </div>
-                    <div class="modal-info-row">
-                        <div class="modal-label">STATUS:</div>
-                        <div class="modal-value">${statusBadge}</div>
-                    </div>
-                    ${resource.user ? `
-                    <div class="modal-info-row">
-                        <div class="modal-label">USER:</div>
-                        <div class="modal-value">${resource.user}</div>
-                    </div>
-                    ` : ''}
-                    ${resource.gpuType ? `
-                    <div class="modal-info-row">
-                        <div class="modal-label">GPU TYPE:</div>
-                        <div class="modal-value">${resource.gpuType}</div>
-                    </div>
-                    ` : ''}
-                </div>
 
-                <div class="modal-section">
-                    <div class="modal-section-title">▸ HOST STATUS</div>
-                    <div class="modal-info-row">
-                        <div class="modal-label">HOST STATUS:</div>
-                        <div class="modal-value">${resource.status}</div>
-                    </div>
-                    <div class="modal-info-row">
-                        <div class="modal-label">UTILIZATION:</div>
-                        <div class="modal-value">${resource.utilization}%</div>
+                    <div class="modal-section">
+                        <div class="modal-section-title">▸ HOST STATUS</div>
+                        <div class="modal-info-row">
+                            <div class="modal-label">HOST STATUS:</div>
+                            <div class="modal-value">${resource.status}</div>
+                        </div>
+                        <div class="modal-info-row">
+                            <div class="modal-label">UTILIZATION:</div>
+                            <div class="modal-value">${resource.utilization}%</div>
+                        </div>
                     </div>
                 </div>
             `;
 
-            // Add load metrics if available
+            // Column 2: All load metrics combined
+            let column2 = '<div>';
             if (resource.load && Object.keys(resource.load).length > 0) {
                 const load = resource.load;
-                content += `
+                column2 += `
                     <div class="modal-section">
                         <div class="modal-section-title">▸ LOAD METRICS</div>
                         <div class="bar-graph">
@@ -1201,12 +1222,6 @@
                             ${load.r1m !== undefined ? createBarGraph('1min', load.r1m, 100) : ''}
                             ${load.r15m !== undefined ? createBarGraph('15min', load.r15m, 100) : ''}
                             ${load.ut !== undefined ? createBarGraph('CPU %', load.ut, 100) : ''}
-                        </div>
-                    </div>
-
-                    <div class="modal-section">
-                        <div class="modal-section-title">▸ SYSTEM RESOURCES</div>
-                        <div class="bar-graph">
                             ${load.mem !== undefined ? createBarGraph('Memory', load.mem, 4000000) : ''}
                             ${load.io !== undefined ? createBarGraph('I/O', load.io, 1000) : ''}
                             ${load.tmp !== undefined ? createBarGraph('Temp', load.tmp / 1000, 400) : ''}
@@ -1214,8 +1229,9 @@
                     </div>
                 `;
             }
+            column2 += '</div>';
 
-            modalContent.innerHTML = content;
+            modalContent.innerHTML = column1 + column2;
             modalOverlay.classList.add('visible');
         }
 
