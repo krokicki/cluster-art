@@ -866,7 +866,7 @@
                     }).length;
 
                     ranges.push({
-                        label: `${Math.round(rangeMin)}-${Math.round(rangeMax)}`,
+                        label: `${formatMemoryGB(rangeMin)}-${formatMemoryGB(rangeMax)} GB`,
                         color: getHeatMapColor((rangeMin + rangeMax) / 2, min, max),
                         count: count
                     });
@@ -904,6 +904,10 @@
             const normalized = Math.max(0, Math.min(1, (value - min) / (max - min)));
             const hue = (1 - normalized) * 240; // 240 = blue (low), 0 = red (high)
             return `hsl(${hue}, 80%, 50%)`;
+        }
+
+        function formatMemoryGB(memMB, decimals = 1) {
+            return (memMB / 1024).toFixed(decimals);
         }
 
         // Generate colors for users
@@ -1306,7 +1310,7 @@
             let column2 = '<div>';
             if (resource.load && Object.keys(resource.load).length > 0) {
                 const load = resource.load;
-                const memoryGB = load.mem !== undefined ? (load.mem / 1024).toFixed(2) : null;
+                const memoryGB = load.mem !== undefined ? formatMemoryGB(load.mem, 2) : null;
                 const diskIO = load.io !== undefined ? load.io.toFixed(1) : null;
 
                 column2 += `
