@@ -342,6 +342,45 @@
         #modal::-webkit-scrollbar-thumb {
             background: #00ff00;
         }
+
+        /* Navigation arrows */
+        .modal-nav-arrow {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 60px;
+            height: 60px;
+            background: #1a1a2e;
+            border: 4px solid #00ff00;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: #00ff00;
+            cursor: pointer;
+            user-select: none;
+            z-index: 2001;
+            transition: all 0.2s;
+        }
+
+        .modal-nav-arrow:hover {
+            background: #00ff00;
+            color: #1a1a2e;
+            box-shadow: 12px 12px 0px rgba(0, 0, 0, 0.9);
+        }
+
+        .modal-nav-arrow.visible {
+            display: flex;
+        }
+
+        #modal-nav-left {
+            left: 20px;
+        }
+
+        #modal-nav-right {
+            right: 20px;
+        }
     </style>
 </head>
 <body>
@@ -363,6 +402,9 @@
             <div id="modal-content"></div>
         </div>
     </div>
+
+    <div id="modal-nav-left" class="modal-nav-arrow">◀</div>
+    <div id="modal-nav-right" class="modal-nav-arrow">▶</div>
 
     <script>
         const canvas = document.getElementById('grid');
@@ -1128,17 +1170,32 @@
             if (e.key === 'Escape') {
                 closeModal();
             }
+
+            // Arrow keys to navigate when modal is open
+            if (modalOverlay.classList.contains('visible')) {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    navigateToPrevious();
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    navigateToNext();
+                }
+            }
         });
 
         // Modal handling
         const modalOverlay = document.getElementById('modal-overlay');
         const modalContent = document.getElementById('modal-content');
         const modal = document.getElementById('modal');
+        const modalNavLeft = document.getElementById('modal-nav-left');
+        const modalNavRight = document.getElementById('modal-nav-right');
+
+        let currentResourceIndex = -1;
 
         function createBarGraph(label, value, max) {
             const percentage = max > 0 ? Math.min(100, (value / max) * 100) : 0;
             const isOverflow = value > max;
-            const displayValue = isOverflow ? `${value.toFixed(1)} (!)` : value.toFixed(1);
+            const displayValue = value.toFixed(1);
             const barColor = isOverflow ? 'background: linear-gradient(90deg, #ff0000, #ff4444);' : 'background: linear-gradient(90deg, #00ff00, #44ff44);';
 
             return `
@@ -1214,17 +1271,30 @@
             let column2 = '<div>';
             if (resource.load && Object.keys(resource.load).length > 0) {
                 const load = resource.load;
+                const memoryGB = load.mem !== undefined ? (load.mem / 1024).toFixed(2) : null;
+                const diskIO = load.io !== undefined ? load.io.toFixed(1) : null;
+
                 column2 += `
                     <div class="modal-section">
-                        <div class="modal-section-title">▸ LOAD METRICS</div>
+                        <div class="modal-section-title">▸ USAGE</div>
+                        ${memoryGB ? `
+                        <div class="modal-info-row">
+                            <div class="modal-label">MEMORY AVAIL:</div>
+                            <div class="modal-value">${memoryGB} GB</div>
+                        </div>
+                        ` : ''}
+                        ${diskIO ? `
+                        <div class="modal-info-row">
+                            <div class="modal-label">DISK I/O:</div>
+                            <div class="modal-value">${diskIO} KB/s</div>
+                        </div>
+                        ` : ''}
                         <div class="bar-graph">
                             ${load.r15s !== undefined ? createBarGraph('15s', load.r15s, 100) : ''}
                             ${load.r1m !== undefined ? createBarGraph('1min', load.r1m, 100) : ''}
                             ${load.r15m !== undefined ? createBarGraph('15min', load.r15m, 100) : ''}
                             ${load.ut !== undefined ? createBarGraph('CPU %', load.ut, 100) : ''}
-                            ${load.mem !== undefined ? createBarGraph('Memory', load.mem, 4000000) : ''}
-                            ${load.io !== undefined ? createBarGraph('I/O', load.io, 1000) : ''}
-                            ${load.tmp !== undefined ? createBarGraph('Temp', load.tmp / 1000, 400) : ''}
+                            ${load.tmp !== undefined ? createBarGraph('Temp', load.tmp / 1000, 10000) : ''}
                         </div>
                     </div>
                 `;
@@ -1233,15 +1303,58 @@
 
             modalContent.innerHTML = column1 + column2;
             modalOverlay.classList.add('visible');
+            updateNavigationArrows();
+        }
+
+        function updateNavigationArrows() {
+            if (currentResourceIndex <= 0) {
+                modalNavLeft.classList.remove('visible');
+            } else {
+                modalNavLeft.classList.add('visible');
+            }
+
+            if (currentResourceIndex >= resources.length - 1) {
+                modalNavRight.classList.remove('visible');
+            } else {
+                modalNavRight.classList.add('visible');
+            }
+        }
+
+        function navigateToPrevious() {
+            if (currentResourceIndex > 0) {
+                currentResourceIndex--;
+                showModal(resources[currentResourceIndex]);
+            }
+        }
+
+        function navigateToNext() {
+            if (currentResourceIndex < resources.length - 1) {
+                currentResourceIndex++;
+                showModal(resources[currentResourceIndex]);
+            }
         }
 
         function closeModal() {
             modalOverlay.classList.remove('visible');
+            modalNavLeft.classList.remove('visible');
+            modalNavRight.classList.remove('visible');
+            currentResourceIndex = -1;
         }
 
         // Click anywhere on modal or overlay to close
         modalOverlay.addEventListener('click', closeModal);
         modal.addEventListener('click', closeModal);
+
+        // Navigation arrow click handlers
+        modalNavLeft.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigateToPrevious();
+        });
+
+        modalNavRight.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigateToNext();
+        });
 
         // Canvas click handler
         canvas.addEventListener('click', (e) => {
@@ -1255,6 +1368,7 @@
             const resource = resources.find(r => r.x === gridX && r.y === gridY);
 
             if (resource) {
+                currentResourceIndex = resources.indexOf(resource);
                 showModal(resource);
             }
         });
