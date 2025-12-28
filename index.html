@@ -163,11 +163,31 @@
         #legend-content::-webkit-scrollbar-thumb {
             background: #00ff00;
         }
+
+        #mode-indicator {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            padding: 12px 16px;
+            background: #1a1a2e;
+            border: 4px solid #00ff00;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            color: #00ff00;
+            z-index: 1000;
+            white-space: nowrap;
+        }
+
+        #mode-indicator .mode-number {
+            color: #ffff00;
+        }
     </style>
 </head>
 <body>
     <canvas id="grid"></canvas>
     <div id="tooltip" class="bottom"></div>
+    <div id="mode-indicator"><span class="mode-number">1</span> USER</div>
     <div id="legend">
         <div id="legend-title">LEGEND</div>
         <div id="legend-content">
@@ -186,19 +206,47 @@
         let resources = [];
         let userColorMap = new Map();
 
+        // Color mode management
+        const MODE_DESCRIPTIONS = [
+            'USER',
+            'HOSTNAME',
+            'ROW',
+            'CPU/GPU',
+            'GPU TYPE',
+            'UTILIZATION',
+            'SLOT STATUS',
+            'HOST STATUS',
+            'MEMORY'
+        ];
+
+        let currentColorMode = 1;
+        let colorStrategies = [];
+
         // Resource model
         class Resource {
-            constructor(hostname, type, index, user) {
+            constructor(hostname, type, index, user, hostData) {
                 this.hostname = hostname;
                 this.type = type; // 'cpu' or 'gpu'
                 this.index = index; // Index within the host
                 this.user = user || null; // Username or null if idle
                 this.x = 0; // Grid position
                 this.y = 0;
+
+                // Additional metadata from host
+                this.gpuType = hostData?.gpu_type || null;
+                this.utilization = hostData?.utilization || 0;
+                this.status = hostData?.status || 'unknown';
+                this.load = hostData?.load || {};
             }
 
             get isIdle() {
                 return !this.user || this.user === '';
+            }
+
+            get row() {
+                // Extract row prefix (e.g., "h04" from "h04u08")
+                const match = this.hostname.match(/^([a-z]+\d+)/);
+                return match ? match[1] : this.hostname;
             }
         }
 
@@ -290,6 +338,333 @@
             }
         }
 
+        // Color strategy interface
+        class ColorStrategy {
+            constructor() {
+                this.colorMap = new Map();
+            }
+
+            getColor(resource) {
+                throw new Error('getColor() must be implemented');
+            }
+
+            getLegendItems(resources) {
+                throw new Error('getLegendItems() must be implemented');
+            }
+
+            initialize(resources) {
+                // Override if needed to pre-compute colors
+            }
+        }
+
+        // Mode 1: By User
+        class UserColorStrategy extends ColorStrategy {
+            initialize(resources) {
+                const users = resources.map(r => r.user).filter(u => u && u !== '');
+                const uniqueUsers = Array.from(new Set(users));
+                const colors = generateDistinctColors(uniqueUsers.length);
+
+                uniqueUsers.forEach((user, i) => {
+                    this.colorMap.set(user, colors[i]);
+                });
+                this.colorMap.set(null, '#2a2a2a');
+                this.colorMap.set('', '#2a2a2a');
+            }
+
+            getColor(resource) {
+                return this.colorMap.get(resource.user) || this.colorMap.get(null);
+            }
+
+            getLegendItems(resources) {
+                const counts = new Map();
+                resources.forEach(r => {
+                    const key = r.user || 'idle';
+                    counts.set(key, (counts.get(key) || 0) + 1);
+                });
+
+                return Array.from(counts.keys())
+                    .sort((a, b) => {
+                        if (a === 'idle') return 1;
+                        if (b === 'idle') return -1;
+                        return counts.get(b) - counts.get(a);
+                    })
+                    .map(key => ({
+                        label: key === 'idle' ? 'IDLE' : key,
+                        color: this.getColor({ user: key === 'idle' ? null : key }),
+                        count: counts.get(key)
+                    }));
+            }
+        }
+
+        // Mode 2: By Hostname
+        class HostnameColorStrategy extends ColorStrategy {
+            initialize(resources) {
+                const hostnames = Array.from(new Set(resources.map(r => r.hostname))).sort();
+                const colors = generateDistinctColors(hostnames.length);
+                hostnames.forEach((hostname, i) => {
+                    this.colorMap.set(hostname, colors[i]);
+                });
+            }
+
+            getColor(resource) {
+                return this.colorMap.get(resource.hostname) || '#2a2a2a';
+            }
+
+            getLegendItems(resources) {
+                const counts = new Map();
+                resources.forEach(r => {
+                    counts.set(r.hostname, (counts.get(r.hostname) || 0) + 1);
+                });
+
+                return Array.from(counts.keys())
+                    .sort()
+                    .map(hostname => ({
+                        label: hostname,
+                        color: this.colorMap.get(hostname),
+                        count: counts.get(hostname)
+                    }));
+            }
+        }
+
+        // Mode 3: By Row
+        class RowColorStrategy extends ColorStrategy {
+            initialize(resources) {
+                const rows = Array.from(new Set(resources.map(r => r.row))).sort();
+                const colors = generateDistinctColors(rows.length);
+                rows.forEach((row, i) => {
+                    this.colorMap.set(row, colors[i]);
+                });
+            }
+
+            getColor(resource) {
+                return this.colorMap.get(resource.row) || '#2a2a2a';
+            }
+
+            getLegendItems(resources) {
+                const counts = new Map();
+                resources.forEach(r => {
+                    counts.set(r.row, (counts.get(r.row) || 0) + 1);
+                });
+
+                return Array.from(counts.keys())
+                    .sort()
+                    .map(row => ({
+                        label: row,
+                        color: this.colorMap.get(row),
+                        count: counts.get(row)
+                    }));
+            }
+        }
+
+        // Mode 4: By Resource Type (CPU/GPU)
+        class TypeColorStrategy extends ColorStrategy {
+            constructor() {
+                super();
+                this.colorMap.set('cpu', '#4488ff'); // Blue
+                this.colorMap.set('gpu', '#ff8844'); // Orange
+            }
+
+            getColor(resource) {
+                return this.colorMap.get(resource.type);
+            }
+
+            getLegendItems(resources) {
+                const counts = new Map();
+                resources.forEach(r => {
+                    counts.set(r.type, (counts.get(r.type) || 0) + 1);
+                });
+
+                return ['cpu', 'gpu'].map(type => ({
+                    label: type.toUpperCase(),
+                    color: this.colorMap.get(type),
+                    count: counts.get(type) || 0
+                }));
+            }
+        }
+
+        // Mode 5: By GPU Type
+        class GpuTypeColorStrategy extends ColorStrategy {
+            initialize(resources) {
+                const gpuTypes = Array.from(new Set(resources.map(r => r.gpuType).filter(t => t)));
+                const colors = generateDistinctColors(gpuTypes.length + 1);
+
+                gpuTypes.forEach((type, i) => {
+                    this.colorMap.set(type, colors[i]);
+                });
+                this.colorMap.set(null, colors[gpuTypes.length]); // CPU color
+            }
+
+            getColor(resource) {
+                return this.colorMap.get(resource.gpuType) || this.colorMap.get(null);
+            }
+
+            getLegendItems(resources) {
+                const counts = new Map();
+                resources.forEach(r => {
+                    const key = r.gpuType || 'CPU';
+                    counts.set(key, (counts.get(key) || 0) + 1);
+                });
+
+                return Array.from(counts.keys())
+                    .sort((a, b) => {
+                        if (a === 'CPU') return 1;
+                        if (b === 'CPU') return -1;
+                        return a.localeCompare(b);
+                    })
+                    .map(key => ({
+                        label: key,
+                        color: this.getColor({ gpuType: key === 'CPU' ? null : key }),
+                        count: counts.get(key)
+                    }));
+            }
+        }
+
+        // Mode 6: By Utilization (Heat Map)
+        class UtilizationColorStrategy extends ColorStrategy {
+            initialize(resources) {
+                const utils = resources.map(r => r.utilization);
+                this.min = Math.min(...utils);
+                this.max = Math.max(...utils);
+            }
+
+            getColor(resource) {
+                return getHeatMapColor(resource.utilization, this.min, this.max);
+            }
+
+            getLegendItems(resources) {
+                const ranges = [
+                    { label: '0-20%', min: 0, max: 20 },
+                    { label: '21-40%', min: 21, max: 40 },
+                    { label: '41-60%', min: 41, max: 60 },
+                    { label: '61-80%', min: 61, max: 80 },
+                    { label: '81-100%', min: 81, max: 100 }
+                ];
+
+                return ranges.map(range => {
+                    const count = resources.filter(r =>
+                        r.utilization >= range.min && r.utilization <= range.max
+                    ).length;
+                    return {
+                        label: range.label,
+                        color: getHeatMapColor((range.min + range.max) / 2, 0, 100),
+                        count: count
+                    };
+                });
+            }
+        }
+
+        // Mode 7: By Slot Status (Idle vs In-Use)
+        class StatusColorStrategy extends ColorStrategy {
+            constructor() {
+                super();
+                this.colorMap.set(true, '#2a2a2a');  // Idle
+                this.colorMap.set(false, '#44ff44'); // In-use
+            }
+
+            getColor(resource) {
+                return this.colorMap.get(resource.isIdle);
+            }
+
+            getLegendItems(resources) {
+                const idleCount = resources.filter(r => r.isIdle).length;
+                const inUseCount = resources.length - idleCount;
+
+                return [
+                    { label: 'IN-USE', color: this.colorMap.get(false), count: inUseCount },
+                    { label: 'IDLE', color: this.colorMap.get(true), count: idleCount }
+                ];
+            }
+        }
+
+        // Mode 8: By Host Status
+        class HostStatusColorStrategy extends ColorStrategy {
+            initialize(resources) {
+                const statuses = Array.from(new Set(resources.map(r => r.status)));
+                const colors = generateDistinctColors(statuses.length);
+                statuses.forEach((status, i) => {
+                    this.colorMap.set(status, colors[i]);
+                });
+            }
+
+            getColor(resource) {
+                return this.colorMap.get(resource.status) || '#2a2a2a';
+            }
+
+            getLegendItems(resources) {
+                const counts = new Map();
+                resources.forEach(r => {
+                    counts.set(r.status, (counts.get(r.status) || 0) + 1);
+                });
+
+                return Array.from(counts.keys())
+                    .sort((a, b) => counts.get(b) - counts.get(a))
+                    .map(status => ({
+                        label: status,
+                        color: this.colorMap.get(status),
+                        count: counts.get(status)
+                    }));
+            }
+        }
+
+        // Mode 9: By Memory Load
+        class MemoryLoadColorStrategy extends ColorStrategy {
+            initialize(resources) {
+                const mems = resources.map(r => r.load?.mem || 0);
+                this.min = Math.min(...mems);
+                this.max = Math.max(...mems);
+            }
+
+            getColor(resource) {
+                const mem = resource.load?.mem || 0;
+                return getHeatMapColor(mem, this.min, this.max);
+            }
+
+            getLegendItems(resources) {
+                const mems = resources.map(r => r.load?.mem || 0);
+                const min = Math.min(...mems);
+                const max = Math.max(...mems);
+                const range = max - min;
+                const step = range / 5;
+
+                const ranges = [];
+                for (let i = 0; i < 5; i++) {
+                    const rangeMin = min + (step * i);
+                    const rangeMax = min + (step * (i + 1));
+                    const count = resources.filter(r => {
+                        const mem = r.load?.mem || 0;
+                        return mem >= rangeMin && mem < (i === 4 ? rangeMax + 1 : rangeMax);
+                    }).length;
+
+                    ranges.push({
+                        label: `${Math.round(rangeMin)}-${Math.round(rangeMax)}`,
+                        color: getHeatMapColor((rangeMin + rangeMax) / 2, min, max),
+                        count: count
+                    });
+                }
+
+                return ranges;
+            }
+        }
+
+        // Helper color generation functions
+        function generateDistinctColors(count) {
+            const colors = [];
+            for (let i = 0; i < count; i++) {
+                const hue = (i * 360 / count) % 360;
+                const saturation = 70;
+                const lightness = 60;
+                colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
+            }
+            return colors;
+        }
+
+        function getHeatMapColor(value, min, max) {
+            if (max === min) return 'hsl(120, 70%, 50%)'; // All same value, use middle color
+            const normalized = Math.max(0, Math.min(1, (value - min) / (max - min)));
+            const hue = (1 - normalized) * 240; // 240 = blue (low), 0 = red (high)
+            return `hsl(${hue}, 80%, 50%)`;
+        }
+
         // Generate colors for users
         function generateUserColors(users) {
             const colors = new Map();
@@ -322,13 +697,13 @@
                 data.hostDetails.forEach(host => {
                     // Add CPU resources
                     host.cpuSlots.forEach((user, idx) => {
-                        allResources.push(new Resource(host.hostname, 'cpu', idx, user));
+                        allResources.push(new Resource(host.hostname, 'cpu', idx, user, host));
                         if (user && user !== '') allUsers.push(user);
                     });
 
                     // Add GPU resources
                     host.gpuSlots.forEach((user, idx) => {
-                        allResources.push(new Resource(host.hostname, 'gpu', idx, user));
+                        allResources.push(new Resource(host.hostname, 'gpu', idx, user, host));
                         if (user && user !== '') allUsers.push(user);
                     });
                 });
@@ -348,40 +723,43 @@
             strategy.layout(resources, gridWidth, gridHeight);
         }
 
+        // Initialize color strategies
+        function initializeColorStrategies() {
+            colorStrategies = [
+                new UserColorStrategy(),
+                new HostnameColorStrategy(),
+                new RowColorStrategy(),
+                new TypeColorStrategy(),
+                new GpuTypeColorStrategy(),
+                new UtilizationColorStrategy(),
+                new StatusColorStrategy(),
+                new HostStatusColorStrategy(),
+                new MemoryLoadColorStrategy()
+            ];
+
+            // Initialize each strategy with the resources
+            colorStrategies.forEach(strategy => strategy.initialize(resources));
+        }
+
         // Populate legend
         function populateLegend() {
             const legendItems = document.getElementById('legend-items');
             legendItems.innerHTML = '';
 
-            // Count resources per user
-            const userCounts = new Map();
-            resources.forEach(resource => {
-                const user = resource.user || 'idle';
-                userCounts.set(user, (userCounts.get(user) || 0) + 1);
-            });
+            if (colorStrategies.length === 0) return;
 
-            // Sort users by count (descending), with idle at the end
-            const sortedUsers = Array.from(userCounts.keys()).sort((a, b) => {
-                if (a === 'idle') return 1;
-                if (b === 'idle') return -1;
-                const countDiff = userCounts.get(b) - userCounts.get(a);
-                if (countDiff !== 0) return countDiff;
-                return a.localeCompare(b); // alphabetical tiebreaker
-            });
+            const colorStrategy = colorStrategies[currentColorMode - 1];
+            const items = colorStrategy.getLegendItems(resources);
 
-            // Create legend items
-            sortedUsers.forEach(user => {
-                const count = userCounts.get(user);
-                const color = userColorMap.get(user === 'idle' ? null : user) || '#2a2a2a';
-
-                const item = document.createElement('div');
-                item.className = 'legend-item';
-                item.innerHTML = `
-                    <div class="legend-color" style="background-color: ${color}"></div>
-                    <span class="legend-user">${user === 'idle' ? 'IDLE' : user}</span>
-                    <span class="legend-count">${count}</span>
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'legend-item';
+                div.innerHTML = `
+                    <div class="legend-color" style="background-color: ${item.color}"></div>
+                    <span class="legend-user">${item.label}</span>
+                    <span class="legend-count">${item.count}</span>
                 `;
-                legendItems.appendChild(item);
+                legendItems.appendChild(div);
             });
         }
 
@@ -389,8 +767,12 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            if (colorStrategies.length === 0) return;
+
+            const colorStrategy = colorStrategies[currentColorMode - 1];
+
             resources.forEach(resource => {
-                const color = userColorMap.get(resource.user) || userColorMap.get(null);
+                const color = colorStrategy.getColor(resource);
                 ctx.fillStyle = color;
                 ctx.fillRect(
                     resource.x * PIXEL_SIZE,
@@ -424,6 +806,9 @@
             const loaded = await loadClusterData();
 
             if (loaded) {
+                // Initialize color strategies
+                initializeColorStrategies();
+
                 // Apply default layout strategy
                 const layoutStrategy = new HostnameHierarchyLayout();
                 applyLayout(layoutStrategy);
@@ -512,6 +897,24 @@
             draw(); // Redraw to remove hover border
         }
 
+        // Mode switching
+        const modeIndicator = document.getElementById('mode-indicator');
+
+        function updateModeIndicator() {
+            const modeNum = currentColorMode;
+            const modeName = MODE_DESCRIPTIONS[currentColorMode - 1];
+            modeIndicator.innerHTML = `<span class="mode-number">${modeNum}</span> ${modeName}`;
+        }
+
+        function switchColorMode(mode) {
+            if (mode >= 1 && mode <= 9 && colorStrategies.length > 0) {
+                currentColorMode = mode;
+                updateModeIndicator();
+                populateLegend();
+                draw();
+            }
+        }
+
         // Legend toggle
         const legend = document.getElementById('legend');
         const legendTitle = document.getElementById('legend-title');
@@ -528,10 +931,17 @@
 
         legendTitle.addEventListener('click', toggleLegend);
 
-        // Keyboard shortcut: L to toggle legend
+        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
+            // L to toggle legend
             if (e.key === 'l' || e.key === 'L') {
                 toggleLegend();
+            }
+
+            // Number keys 1-9 to switch color modes
+            const key = parseInt(e.key);
+            if (key >= 1 && key <= 9) {
+                switchColorMode(key);
             }
         });
 
