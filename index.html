@@ -19,9 +19,108 @@
             background: #000;
         }
 
-        canvas {
+        #canvas-container {
+            position: absolute;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            border: 2px solid #00ff00;
+        }
+
+        #canvas-container canvas {
             display: block;
-            cursor: crosshair;
+            cursor: grab;
+        }
+
+        #canvas-container.dragging canvas {
+            cursor: grabbing;
+        }
+
+        .resize-handle {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #00ff00;
+            border: 2px solid #000;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+
+        #canvas-container:hover .resize-handle {
+            opacity: 0.7;
+        }
+
+        .resize-handle:hover {
+            opacity: 1 !important;
+            transform: scale(1.2);
+        }
+
+        .resize-handle.top-left {
+            top: -10px;
+            left: -10px;
+            cursor: nwse-resize;
+        }
+
+        .resize-handle.top-right {
+            top: -10px;
+            right: -10px;
+            cursor: nesw-resize;
+        }
+
+        .resize-handle.bottom-left {
+            bottom: -10px;
+            left: -10px;
+            cursor: nesw-resize;
+        }
+
+        .resize-handle.bottom-right {
+            bottom: -10px;
+            right: -10px;
+            cursor: nwse-resize;
+        }
+
+        #zoom-controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 8px;
+            z-index: 1000;
+        }
+
+        .zoom-button {
+            width: 40px;
+            height: 40px;
+            background: #1a1a2e;
+            border: 4px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.8);
+        }
+
+        .zoom-button:hover {
+            background: #00ff00;
+            color: #000;
+        }
+
+        .zoom-button:active {
+            box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.8);
+            transform: translate(2px, 2px);
+        }
+
+        #zoom-level {
+            padding: 8px 12px;
+            background: #1a1a2e;
+            border: 4px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            display: flex;
+            align-items: center;
         }
 
         #tooltip {
@@ -162,25 +261,6 @@
 
         #legend-content::-webkit-scrollbar-thumb {
             background: #00ff00;
-        }
-
-        #mode-indicator {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            padding: 12px 16px;
-            background: #1a1a2e;
-            border: 4px solid #00ff00;
-            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
-            font-family: 'Press Start 2P', monospace;
-            font-size: 9px;
-            color: #00ff00;
-            z-index: 1000;
-            white-space: nowrap;
-        }
-
-        #mode-indicator .mode-number {
-            color: #ffff00;
         }
 
         /* Modal dialog */
@@ -384,9 +464,19 @@
     </style>
 </head>
 <body>
-    <canvas id="grid"></canvas>
+    <div id="canvas-container">
+        <canvas id="grid"></canvas>
+        <div class="resize-handle top-left" data-corner="top-left"></div>
+        <div class="resize-handle top-right" data-corner="top-right"></div>
+        <div class="resize-handle bottom-left" data-corner="bottom-left"></div>
+        <div class="resize-handle bottom-right" data-corner="bottom-right"></div>
+    </div>
     <div id="tooltip" class="bottom"></div>
-    <div id="mode-indicator"><span class="mode-number">1</span> USER</div>
+    <div id="zoom-controls">
+        <button class="zoom-button" id="zoom-out" title="Zoom Out (-)">-</button>
+        <div id="zoom-level">100%</div>
+        <button class="zoom-button" id="zoom-in" title="Zoom In (+)">+</button>
+    </div>
     <div id="legend">
         <div id="legend-title">LEGEND</div>
         <div id="legend-content">
@@ -412,6 +502,37 @@
 
         // Configuration
         const PIXEL_SIZE = 8; // Size of each square pixel
+
+        // Canvas container state
+        let canvasX = 0;
+        let canvasY = 0;
+        let canvasWidth = 1200;    // Default size
+        let canvasHeight = 800;
+
+        // Zoom and pan
+        let zoomLevel = 1.0;
+        let panOffsetX = 0;
+        let panOffsetY = 0;
+
+        // Interaction state
+        let isDragging = false;
+        let isResizing = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let dragStartCanvasX = 0;
+        let dragStartCanvasY = 0;
+        let dragStartCanvasWidth = 0;
+        let dragStartCanvasHeight = 0;
+        let resizeHandle = null;
+        let clickStartX = 0;
+        let clickStartY = 0;
+        let lastTouchDistance = 0;
+
+        // Constants
+        const MIN_ZOOM = 0.5;
+        const MAX_ZOOM = 3.0;
+        const ZOOM_STEP = 0.1;
+        const MIN_CANVAS_SIZE = 200;
 
         let gridWidth, gridHeight;
         let resources = [];
@@ -917,6 +1038,35 @@
             return (memMB / 1024).toFixed(decimals);
         }
 
+        // Canvas positioning and sizing functions
+        function centerCanvas() {
+            canvasX = (window.innerWidth - canvasWidth) / 2;
+            canvasY = (window.innerHeight - canvasHeight) / 2;
+            updateCanvasPosition();
+        }
+
+        function updateCanvasPosition() {
+            const container = document.getElementById('canvas-container');
+            container.style.left = canvasX + 'px';
+            container.style.top = canvasY + 'px';
+            container.style.width = canvasWidth + 'px';
+            container.style.height = canvasHeight + 'px';
+        }
+
+        function updateCanvasSize() {
+            const canvas = document.getElementById('grid');
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+
+            gridWidth = Math.floor(canvasWidth / PIXEL_SIZE);
+            gridHeight = Math.floor(canvasHeight / PIXEL_SIZE);
+        }
+
+        function updateZoomDisplay() {
+            const zoomDisplay = document.getElementById('zoom-level');
+            zoomDisplay.textContent = Math.round(zoomLevel * 100) + '%';
+        }
+
         // Generate colors for users
         function generateUserColors(users) {
             const colors = new Map();
@@ -1033,6 +1183,13 @@
 
             if (colorStrategies.length === 0) return;
 
+            // Save context state
+            ctx.save();
+
+            // Apply zoom and pan transforms
+            ctx.translate(panOffsetX, panOffsetY);
+            ctx.scale(zoomLevel, zoomLevel);
+
             const colorStrategy = colorStrategies[currentColorMode - 1];
 
             resources.forEach(resource => {
@@ -1048,7 +1205,7 @@
                 // Draw white border for hovered pixel
                 if (currentResource && resource === currentResource) {
                     ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1;
+                    ctx.lineWidth = 1 / zoomLevel;  // Maintain border width at all zooms
                     ctx.strokeRect(
                         resource.x * PIXEL_SIZE + 0.5,
                         resource.y * PIXEL_SIZE + 0.5,
@@ -1057,15 +1214,23 @@
                     );
                 }
             });
+
+            // Restore context state
+            ctx.restore();
         }
 
         // Initialize visualization
         async function init() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            // Set initial canvas size
+            canvasWidth = 1200;
+            canvasHeight = 800;
 
-            gridWidth = Math.floor(canvas.width / PIXEL_SIZE);
-            gridHeight = Math.floor(canvas.height / PIXEL_SIZE);
+            // Center the canvas on page
+            centerCanvas();
+            updateCanvasSize();
+
+            // Initialize zoom display
+            updateZoomDisplay();
 
             const loaded = await loadClusterData();
 
@@ -1088,17 +1253,16 @@
 
         // Handle window resize
         window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            // Canvas size stays the same, only ensure it's still visible
+            const maxX = window.innerWidth - canvasWidth;
+            const maxY = window.innerHeight - canvasHeight;
 
-            gridWidth = Math.floor(canvas.width / PIXEL_SIZE);
-            gridHeight = Math.floor(canvas.height / PIXEL_SIZE);
+            // Keep canvas within viewport bounds
+            canvasX = Math.max(0, Math.min(canvasX, maxX));
+            canvasY = Math.max(0, Math.min(canvasY, maxY));
 
-            if (resources.length > 0) {
-                const layoutStrategy = new HostnameHierarchyLayout();
-                applyLayout(layoutStrategy);
-                draw();
-            }
+            updateCanvasPosition();
+            // Note: Don't re-layout or resize canvas - maintain user's chosen size
         });
 
         // Tooltip handling
@@ -1110,9 +1274,13 @@
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
+            // Reverse the zoom and pan transforms
+            const worldX = (mouseX - panOffsetX) / zoomLevel;
+            const worldY = (mouseY - panOffsetY) / zoomLevel;
+
             // Calculate grid position
-            const gridX = Math.floor(mouseX / PIXEL_SIZE);
-            const gridY = Math.floor(mouseY / PIXEL_SIZE);
+            const gridX = Math.floor(worldX / PIXEL_SIZE);
+            const gridY = Math.floor(worldY / PIXEL_SIZE);
 
             // Find resource at this position
             const resource = resources.find(r => r.x === gridX && r.y === gridY);
@@ -1127,6 +1295,144 @@
 
         canvas.addEventListener('mouseleave', () => {
             hideTooltip();
+        });
+
+        // Canvas drag functionality
+        const container = document.getElementById('canvas-container');
+
+        canvas.addEventListener('mousedown', (e) => {
+            // Save click position for distinguishing click from drag
+            clickStartX = e.clientX;
+            clickStartY = e.clientY;
+
+            // Don't start drag if clicking on a resource (for modal)
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const worldX = (mouseX - panOffsetX) / zoomLevel;
+            const worldY = (mouseY - panOffsetY) / zoomLevel;
+            const gridX = Math.floor(worldX / PIXEL_SIZE);
+            const gridY = Math.floor(worldY / PIXEL_SIZE);
+            const resource = resources.find(r => r.x === gridX && r.y === gridY);
+
+            if (!resource) {
+                // Start dragging canvas
+                isDragging = true;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                dragStartCanvasX = canvasX;
+                dragStartCanvasY = canvasY;
+                container.classList.add('dragging');
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (isDragging) {
+                isDragging = false;
+                container.classList.remove('dragging');
+            }
+            if (isResizing) {
+                isResizing = false;
+                resizeHandle = null;
+            }
+        });
+
+        // Corner resize handlers
+        const resizeHandles = document.querySelectorAll('.resize-handle');
+
+        resizeHandles.forEach(handle => {
+            handle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                resizeHandle = e.target.dataset.corner;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                dragStartCanvasX = canvasX;
+                dragStartCanvasY = canvasY;
+                dragStartCanvasWidth = canvasWidth;
+                dragStartCanvasHeight = canvasHeight;
+                e.stopPropagation();
+                e.preventDefault();
+            });
+        });
+
+        // Handle resize dragging (combined with drag mousemove)
+        document.addEventListener('mousemove', (e) => {
+            if (isResizing) {
+                const dx = e.clientX - dragStartX;
+                const dy = e.clientY - dragStartY;
+
+                switch(resizeHandle) {
+                    case 'top-left':
+                        // Move top-left corner
+                        canvasX = dragStartCanvasX + dx;
+                        canvasY = dragStartCanvasY + dy;
+                        canvasWidth = Math.max(MIN_CANVAS_SIZE, dragStartCanvasWidth - dx);
+                        canvasHeight = Math.max(MIN_CANVAS_SIZE, dragStartCanvasHeight - dy);
+                        break;
+                    case 'top-right':
+                        // Move top-right corner
+                        canvasY = dragStartCanvasY + dy;
+                        canvasWidth = Math.max(MIN_CANVAS_SIZE, dragStartCanvasWidth + dx);
+                        canvasHeight = Math.max(MIN_CANVAS_SIZE, dragStartCanvasHeight - dy);
+                        break;
+                    case 'bottom-left':
+                        // Move bottom-left corner
+                        canvasX = dragStartCanvasX + dx;
+                        canvasWidth = Math.max(MIN_CANVAS_SIZE, dragStartCanvasWidth - dx);
+                        canvasHeight = Math.max(MIN_CANVAS_SIZE, dragStartCanvasHeight + dy);
+                        break;
+                    case 'bottom-right':
+                        // Move bottom-right corner
+                        canvasWidth = Math.max(MIN_CANVAS_SIZE, dragStartCanvasWidth + dx);
+                        canvasHeight = Math.max(MIN_CANVAS_SIZE, dragStartCanvasHeight + dy);
+                        break;
+                }
+
+                updateCanvasPosition();
+                updateCanvasSize();
+
+                // Re-layout resources to fit new canvas size
+                const layoutStrategy = new HostnameHierarchyLayout();
+                applyLayout(layoutStrategy);
+                draw();
+            } else if (isDragging) {
+                const dx = e.clientX - dragStartX;
+                const dy = e.clientY - dragStartY;
+
+                canvasX = dragStartCanvasX + dx;
+                canvasY = dragStartCanvasY + dy;
+
+                updateCanvasPosition();
+            }
+        });
+
+        // Pinch-to-zoom gesture support
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
+                e.preventDefault();
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                const delta = distance - lastTouchDistance;
+                const zoomChange = delta * 0.01;  // Sensitivity factor
+
+                zoomLevel = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomLevel + zoomChange));
+                lastTouchDistance = distance;
+
+                updateZoomDisplay();
+                draw();
+                e.preventDefault();
+            }
         });
 
         function showTooltip(resource, mouseY) {
@@ -1162,18 +1468,9 @@
         }
 
         // Mode switching
-        const modeIndicator = document.getElementById('mode-indicator');
-
-        function updateModeIndicator() {
-            const modeNum = currentColorMode;
-            const modeName = MODE_DESCRIPTIONS[currentColorMode - 1];
-            modeIndicator.innerHTML = `<span class="mode-number">${modeNum}</span> ${modeName}`;
-        }
-
         function switchColorMode(mode) {
             if (mode >= 1 && mode <= 9 && colorStrategies.length > 0) {
                 currentColorMode = mode;
-                updateModeIndicator();
                 populateLegend();
                 draw();
             }
@@ -1195,8 +1492,36 @@
 
         legendTitle.addEventListener('click', toggleLegend);
 
+        // Zoom functions
+        function zoomIn() {
+            if (zoomLevel < MAX_ZOOM) {
+                zoomLevel = Math.min(MAX_ZOOM, zoomLevel + ZOOM_STEP);
+                updateZoomDisplay();
+                draw();
+            }
+        }
+
+        function zoomOut() {
+            if (zoomLevel > MIN_ZOOM) {
+                zoomLevel = Math.max(MIN_ZOOM, zoomLevel - ZOOM_STEP);
+                updateZoomDisplay();
+                draw();
+            }
+        }
+
+        // Zoom button event listeners
+        document.getElementById('zoom-in').addEventListener('click', zoomIn);
+        document.getElementById('zoom-out').addEventListener('click', zoomOut);
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
+            // +/- keys for zoom
+            if (e.key === '+' || e.key === '=') {
+                zoomIn();
+            } else if (e.key === '-' || e.key === '_') {
+                zoomOut();
+            }
+
             // L to toggle legend
             if (e.key === 'l' || e.key === 'L') {
                 toggleLegend();
@@ -1404,18 +1729,29 @@
 
         // Canvas click handler
         canvas.addEventListener('click', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
+            // Only open modal if mouse hasn't moved much (not a drag)
+            const dx = e.clientX - clickStartX;
+            const dy = e.clientY - clickStartY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
 
-            const gridX = Math.floor(mouseX / PIXEL_SIZE);
-            const gridY = Math.floor(mouseY / PIXEL_SIZE);
+            if (distance < 5) {  // Threshold for click vs drag
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
 
-            const resource = resources.find(r => r.x === gridX && r.y === gridY);
+                // Reverse the zoom and pan transforms
+                const worldX = (mouseX - panOffsetX) / zoomLevel;
+                const worldY = (mouseY - panOffsetY) / zoomLevel;
 
-            if (resource) {
-                currentResourceIndex = resources.indexOf(resource);
-                showModal(resource);
+                const gridX = Math.floor(worldX / PIXEL_SIZE);
+                const gridY = Math.floor(worldY / PIXEL_SIZE);
+
+                const resource = resources.find(r => r.x === gridX && r.y === gridY);
+
+                if (resource) {
+                    currentResourceIndex = resources.indexOf(resource);
+                    showModal(resource);
+                }
             }
         });
 
