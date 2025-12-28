@@ -1300,25 +1300,14 @@
             clickStartX = e.clientX;
             clickStartY = e.clientY;
 
-            // Don't start drag if clicking on a resource (for modal)
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-            const effectivePixelSize = PIXEL_SIZE * zoomLevel;
-            const gridX = Math.floor(mouseX / effectivePixelSize);
-            const gridY = Math.floor(mouseY / effectivePixelSize);
-            const resource = resources.find(r => r.x === gridX && r.y === gridY);
-
-            if (!resource) {
-                // Start dragging canvas
-                isDragging = true;
-                dragStartX = e.clientX;
-                dragStartY = e.clientY;
-                dragStartCanvasX = canvasX;
-                dragStartCanvasY = canvasY;
-                container.classList.add('dragging');
-                e.preventDefault();
-            }
+            // Allow dragging from anywhere on the canvas
+            isDragging = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            dragStartCanvasX = canvasX;
+            dragStartCanvasY = canvasY;
+            container.classList.add('dragging');
+            e.preventDefault();
         });
 
         document.addEventListener('mouseup', (e) => {
