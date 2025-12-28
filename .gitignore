@@ -1,4 +1,4 @@
-
-# pixi environments
+# Python
 .pixi
 *.egg-info
+__pycache__

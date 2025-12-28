@@ -1096,7 +1096,7 @@
         // Load cluster data from JSON
         async function loadClusterData() {
             try {
-                const response = await fetch('cluster-status.json');
+                const response = await fetch('/api/cluster-status');
                 const data = await response.json();
 
                 // Create hostname to hardware group mapping
@@ -1248,6 +1248,36 @@
                 ctx.fillText('Failed to load cluster-status.json', 20, 30);
             }
         }
+
+        // Refresh data periodically without changing user settings
+        async function refreshData() {
+            console.log(`[${new Date().toISOString()}] Refreshing cluster data...`);
+
+            const loaded = await loadClusterData();
+
+            if (loaded) {
+                // Re-initialize color strategies with new data
+                initializeColorStrategies();
+
+                // Re-apply layout (preserves zoom, canvas position/size)
+                const layoutStrategy = new HostnameHierarchyLayout();
+                applyLayout(layoutStrategy);
+
+                // Redraw with current settings preserved
+                draw();
+
+                // Update legend with new data
+                populateLegend();
+
+                console.log(`[${new Date().toISOString()}] Cluster data refreshed successfully`);
+            } else {
+                console.error(`[${new Date().toISOString()}] Failed to refresh cluster data`);
+            }
+        }
+
+        // Set up periodic data refresh (every 2 minutes)
+        const REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes in milliseconds
+        setInterval(refreshData, REFRESH_INTERVAL);
 
         // Handle window resize
         window.addEventListener('resize', () => {
