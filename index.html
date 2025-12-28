@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cluster Resource Visualization</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+
+        #tooltip {
+            position: fixed;
+            left: 20px;
+            padding: 16px 20px;
+            background: #1a1a2e;
+            border: 4px solid #00ff00;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            line-height: 1.8;
+            color: #00ff00;
+            text-shadow: 0 0 5px rgba(0, 255, 0, 0.7);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 1000;
+            white-space: nowrap;
+        }
+
+        #tooltip.visible {
+            opacity: 1;
+        }
+
+        #tooltip.bottom {
+            bottom: 20px;
+        }
+
+        #tooltip.top {
+            top: 20px;
+        }
+
+        #tooltip .label {
+            color: #ffff00;
+            text-shadow: 0 0 5px rgba(255, 255, 0, 0.7);
+        }
+
+        #tooltip .value {
+            color: #00ffff;
+            text-shadow: 0 0 5px rgba(0, 255, 255, 0.7);
+        }
+
+        #tooltip .idle {
+            color: #ff00ff;
+            text-shadow: 0 0 5px rgba(255, 0, 255, 0.7);
+        }
+
+        #legend {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            max-width: 400px;
+            background: #1a1a2e;
+            border: 4px solid #00ff00;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            line-height: 2;
+            color: #00ff00;
+            z-index: 999;
+        }
+
+        #legend-title {
+            color: #ffff00;
+            text-align: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+
+        #legend-title:hover {
+            background: #00ff00;
+            color: #1a1a2e;
+        }
+
+        #legend-title::after {
+            content: ' [L]';
+            color: #00ff00;
+            font-size: 8px;
+        }
+
+        #legend-title:hover::after {
+            color: #1a1a2e;
+        }
+
+        #legend-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        #legend.expanded #legend-content {
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+
+        #legend-items {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 16px;
+            border-top: 2px solid #00ff00;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #00ff00;
+            flex-shrink: 0;
+        }
+
+        .legend-user {
+            color: #00ffff;
+            word-break: break-all;
+        }
+
+        .legend-count {
+            color: #ff00ff;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        #legend-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #legend-content::-webkit-scrollbar-track {
+            background: #0f0f1e;
+        }
+
+        #legend-content::-webkit-scrollbar-thumb {
+            background: #00ff00;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="grid"></canvas>
+    <div id="tooltip" class="bottom"></div>
+    <div id="legend">
+        <div id="legend-title">LEGEND</div>
+        <div id="legend-content">
+            <div id="legend-items"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('grid');
+        const ctx = canvas.getContext('2d');
+
+        // Configuration
+        const PIXEL_SIZE = 8; // Size of each square pixel
+
+        let gridWidth, gridHeight;
+        let resources = [];
+        let userColorMap = new Map();
+
+        // Resource model
+        class Resource {
+            constructor(hostname, type, index, user) {
+                this.hostname = hostname;
+                this.type = type; // 'cpu' or 'gpu'
+                this.index = index; // Index within the host
+                this.user = user || null; // Username or null if idle
+                this.x = 0; // Grid position
+                this.y = 0;
+            }
+
+            get isIdle() {
+                return !this.user || this.user === '';
+            }
+        }
+
+        // Layout strategy interface
+        class LayoutStrategy {
+            layout(resources, gridWidth, gridHeight) {
+                throw new Error('layout() must be implemented');
+            }
+        }
+
+        // Hostname-based hierarchical layout
+        class HostnameHierarchyLayout extends LayoutStrategy {
+            layout(resources, gridWidth, gridHeight) {
+                // Group resources by hostname
+                const hostGroups = new Map();
+                resources.forEach(resource => {
+                    if (!hostGroups.has(resource.hostname)) {
+                        hostGroups.set(resource.hostname, []);
+                    }
+                    hostGroups.get(resource.hostname).push(resource);
+                });
+
+                // Sort hostnames alphabetically for spatial proximity
+                const sortedHostnames = Array.from(hostGroups.keys()).sort();
+
+                // Calculate positions
+                let x = 0, y = 0;
+                const maxWidth = gridWidth;
+
+                sortedHostnames.forEach(hostname => {
+                    const hostResources = hostGroups.get(hostname);
+
+                    // Place all resources from this host together
+                    hostResources.forEach((resource, idx) => {
+                        resource.x = x;
+                        resource.y = y;
+
+                        x++;
+                        if (x >= maxWidth) {
+                            x = 0;
+                            y++;
+                        }
+                    });
+
+                    // Add small gap between hosts (optional)
+                    // x++;
+                    // if (x >= maxWidth) {
+                    //     x = 0;
+                    //     y++;
+                    // }
+                });
+            }
+        }
+
+        // User-based layout (for future use)
+        class UserGroupLayout extends LayoutStrategy {
+            layout(resources, gridWidth, gridHeight) {
+                // Group resources by user
+                const userGroups = new Map();
+                resources.forEach(resource => {
+                    const user = resource.user || 'idle';
+                    if (!userGroups.has(user)) {
+                        userGroups.set(user, []);
+                    }
+                    userGroups.get(user).push(resource);
+                });
+
+                // Sort users alphabetically
+                const sortedUsers = Array.from(userGroups.keys()).sort();
+
+                // Calculate positions
+                let x = 0, y = 0;
+                const maxWidth = gridWidth;
+
+                sortedUsers.forEach(user => {
+                    const userResources = userGroups.get(user);
+
+                    userResources.forEach(resource => {
+                        resource.x = x;
+                        resource.y = y;
+
+                        x++;
+                        if (x >= maxWidth) {
+                            x = 0;
+                            y++;
+                        }
+                    });
+                });
+            }
+        }
+
+        // Generate colors for users
+        function generateUserColors(users) {
+            const colors = new Map();
+            const uniqueUsers = Array.from(new Set(users)).filter(u => u && u !== '');
+
+            uniqueUsers.forEach((user, i) => {
+                const hue = (i * 360 / uniqueUsers.length) % 360;
+                const saturation = 65 + Math.random() * 15;
+                const lightness = 55 + Math.random() * 15;
+                colors.set(user, `hsl(${hue}, ${saturation}%, ${lightness}%)`);
+            });
+
+            // Color for idle resources
+            colors.set(null, '#2a2a2a');
+            colors.set('', '#2a2a2a');
+
+            return colors;
+        }
+
+        // Load cluster data from JSON
+        async function loadClusterData() {
+            try {
+                const response = await fetch('cluster-status.json');
+                const data = await response.json();
+
+                // Extract resources from hostDetails
+                const allResources = [];
+                const allUsers = [];
+
+                data.hostDetails.forEach(host => {
+                    // Add CPU resources
+                    host.cpuSlots.forEach((user, idx) => {
+                        allResources.push(new Resource(host.hostname, 'cpu', idx, user));
+                        if (user && user !== '') allUsers.push(user);
+                    });
+
+                    // Add GPU resources
+                    host.gpuSlots.forEach((user, idx) => {
+                        allResources.push(new Resource(host.hostname, 'gpu', idx, user));
+                        if (user && user !== '') allUsers.push(user);
+                    });
+                });
+
+                resources = allResources;
+                userColorMap = generateUserColors(allUsers);
+
+                return true;
+            } catch (error) {
+                console.error('Failed to load cluster data:', error);
+                return false;
+            }
+        }
+
+        // Apply layout strategy
+        function applyLayout(strategy) {
+            strategy.layout(resources, gridWidth, gridHeight);
+        }
+
+        // Populate legend
+        function populateLegend() {
+            const legendItems = document.getElementById('legend-items');
+            legendItems.innerHTML = '';
+
+            // Count resources per user
+            const userCounts = new Map();
+            resources.forEach(resource => {
+                const user = resource.user || 'idle';
+                userCounts.set(user, (userCounts.get(user) || 0) + 1);
+            });
+
+            // Sort users by count (descending), with idle at the end
+            const sortedUsers = Array.from(userCounts.keys()).sort((a, b) => {
+                if (a === 'idle') return 1;
+                if (b === 'idle') return -1;
+                const countDiff = userCounts.get(b) - userCounts.get(a);
+                if (countDiff !== 0) return countDiff;
+                return a.localeCompare(b); // alphabetical tiebreaker
+            });
+
+            // Create legend items
+            sortedUsers.forEach(user => {
+                const count = userCounts.get(user);
+                const color = userColorMap.get(user === 'idle' ? null : user) || '#2a2a2a';
+
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = `
+                    <div class="legend-color" style="background-color: ${color}"></div>
+                    <span class="legend-user">${user === 'idle' ? 'IDLE' : user}</span>
+                    <span class="legend-count">${count}</span>
+                `;
+                legendItems.appendChild(item);
+            });
+        }
+
+        // Draw the grid
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            resources.forEach(resource => {
+                const color = userColorMap.get(resource.user) || userColorMap.get(null);
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                    resource.x * PIXEL_SIZE,
+                    resource.y * PIXEL_SIZE,
+                    PIXEL_SIZE,
+                    PIXEL_SIZE
+                );
+
+                // Draw white border for hovered pixel
+                if (currentResource && resource === currentResource) {
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(
+                        resource.x * PIXEL_SIZE + 0.5,
+                        resource.y * PIXEL_SIZE + 0.5,
+                        PIXEL_SIZE - 1,
+                        PIXEL_SIZE - 1
+                    );
+                }
+            });
+        }
+
+        // Initialize visualization
+        async function init() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            gridWidth = Math.floor(canvas.width / PIXEL_SIZE);
+            gridHeight = Math.floor(canvas.height / PIXEL_SIZE);
+
+            const loaded = await loadClusterData();
+
+            if (loaded) {
+                // Apply default layout strategy
+                const layoutStrategy = new HostnameHierarchyLayout();
+                applyLayout(layoutStrategy);
+                draw();
+                populateLegend();
+            } else {
+                // Fallback: show error message
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '16px monospace';
+                ctx.fillText('Failed to load cluster-status.json', 20, 30);
+            }
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            gridWidth = Math.floor(canvas.width / PIXEL_SIZE);
+            gridHeight = Math.floor(canvas.height / PIXEL_SIZE);
+
+            if (resources.length > 0) {
+                const layoutStrategy = new HostnameHierarchyLayout();
+                applyLayout(layoutStrategy);
+                draw();
+            }
+        });
+
+        // Tooltip handling
+        const tooltip = document.getElementById('tooltip');
+        let currentResource = null;
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // Calculate grid position
+            const gridX = Math.floor(mouseX / PIXEL_SIZE);
+            const gridY = Math.floor(mouseY / PIXEL_SIZE);
+
+            // Find resource at this position
+            const resource = resources.find(r => r.x === gridX && r.y === gridY);
+
+            if (resource) {
+                currentResource = resource;
+                showTooltip(resource, e.clientY);
+            } else {
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            hideTooltip();
+        });
+
+        function showTooltip(resource, mouseY) {
+            const userText = resource.isIdle
+                ? '<span class="idle">IDLE</span>'
+                : `<span class="value">${resource.user}</span>`;
+
+            tooltip.innerHTML = `
+                <span class="label">HOST:</span> <span class="value">${resource.hostname}</span> |
+                <span class="label">TYPE:</span> <span class="value">${resource.type.toUpperCase()}</span> |
+                <span class="label">SLOT:</span> <span class="value">#${resource.index}</span> |
+                <span class="label">USER:</span> ${userText}
+            `;
+
+            // Position tooltip based on mouse Y position
+            const bottomThreshold = window.innerHeight - 150;
+            if (mouseY > bottomThreshold) {
+                tooltip.classList.remove('bottom');
+                tooltip.classList.add('top');
+            } else {
+                tooltip.classList.remove('top');
+                tooltip.classList.add('bottom');
+            }
+
+            tooltip.classList.add('visible');
+            draw(); // Redraw to show hover border
+        }
+
+        function hideTooltip() {
+            currentResource = null;
+            tooltip.classList.remove('visible');
+            draw(); // Redraw to remove hover border
+        }
+
+        // Legend toggle
+        const legend = document.getElementById('legend');
+        const legendTitle = document.getElementById('legend-title');
+        let legendExpanded = false;
+
+        function toggleLegend() {
+            legendExpanded = !legendExpanded;
+            if (legendExpanded) {
+                legend.classList.add('expanded');
+            } else {
+                legend.classList.remove('expanded');
+            }
+        }
+
+        legendTitle.addEventListener('click', toggleLegend);
+
+        // Keyboard shortcut: L to toggle legend
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'l' || e.key === 'L') {
+                toggleLegend();
+            }
+        });
+
+        // Start
+        init();
+    </script>
+</body>
+</html>

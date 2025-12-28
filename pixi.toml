@@ -1,0 +1,12 @@
+[workspace]
+authors = ["Konrad Rokicki <krokicki@gmail.com>"]
+channels = ["conda-forge"]
+name = "cluster-viz"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+serve = "python -m http.server 8000"
+
+[dependencies]
+python = ">=3.8"
