@@ -182,6 +182,149 @@
         #mode-indicator .mode-number {
             color: #ffff00;
         }
+
+        /* Modal dialog */
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #modal-overlay.visible {
+            display: flex;
+        }
+
+        #modal {
+            background: #1a1a2e;
+            border: 4px solid #00ff00;
+            box-shadow: 12px 12px 0px rgba(0, 0, 0, 0.9);
+            padding: 24px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            font-family: 'Press Start 2P', monospace;
+            color: #00ff00;
+        }
+
+        #modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #00ff00;
+        }
+
+        #modal-title {
+            font-size: 12px;
+            color: #ffff00;
+        }
+
+
+        .modal-section {
+            margin-bottom: 20px;
+        }
+
+        .modal-section-title {
+            color: #00ffff;
+            font-size: 10px;
+            margin-bottom: 10px;
+        }
+
+        .modal-info-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-size: 8px;
+            line-height: 1.6;
+        }
+
+        .modal-label {
+            color: #ffff00;
+            min-width: 100px;
+        }
+
+        .modal-value {
+            color: #00ff00;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border: 2px solid;
+            font-size: 8px;
+        }
+
+        .status-badge.in-use {
+            border-color: #44ff44;
+            color: #44ff44;
+        }
+
+        .status-badge.idle {
+            border-color: #ff00ff;
+            color: #ff00ff;
+        }
+
+        .bar-graph {
+            margin-top: 8px;
+        }
+
+        .bar-graph-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-size: 8px;
+        }
+
+        .bar-graph-label {
+            color: #ffff00;
+            min-width: 60px;
+        }
+
+        .bar-graph-container {
+            flex: 1;
+            height: 16px;
+            background: #0a0a1a;
+            border: 2px solid #00ff00;
+            position: relative;
+        }
+
+        .bar-graph-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #44ff44);
+            transition: width 0.3s ease;
+        }
+
+        .bar-graph-value {
+            color: #00ffff;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        .type-icon {
+            font-size: 24px;
+            line-height: 1;
+        }
+
+        #modal::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #modal::-webkit-scrollbar-track {
+            background: #0f0f1e;
+        }
+
+        #modal::-webkit-scrollbar-thumb {
+            background: #00ff00;
+        }
     </style>
 </head>
 <body>
@@ -192,6 +335,15 @@
         <div id="legend-title">LEGEND</div>
         <div id="legend-content">
             <div id="legend-items"></div>
+        </div>
+    </div>
+
+    <div id="modal-overlay">
+        <div id="modal">
+            <div id="modal-header">
+                <div id="modal-title">RESOURCE DETAILS</div>
+            </div>
+            <div id="modal-content"></div>
         </div>
     </div>
 
@@ -953,6 +1105,141 @@
             const key = parseInt(e.key);
             if (key >= 1 && key <= 9) {
                 switchColorMode(key);
+            }
+
+            // ESC to close modal
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Modal handling
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalContent = document.getElementById('modal-content');
+        const modal = document.getElementById('modal');
+
+        function createBarGraph(label, value, max) {
+            const percentage = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+            const isOverflow = value > max;
+            const displayValue = isOverflow ? `${value.toFixed(1)} (!)` : value.toFixed(1);
+            const barColor = isOverflow ? 'background: linear-gradient(90deg, #ff0000, #ff4444);' : 'background: linear-gradient(90deg, #00ff00, #44ff44);';
+
+            return `
+                <div class="bar-graph-row">
+                    <div class="bar-graph-label">${label}</div>
+                    <div class="bar-graph-container">
+                        <div class="bar-graph-fill" style="width: ${percentage}%; ${barColor}"></div>
+                    </div>
+                    <div class="bar-graph-value">${displayValue}</div>
+                </div>
+            `;
+        }
+
+        function showModal(resource) {
+            const statusBadge = resource.isIdle
+                ? '<span class="status-badge idle">IDLE</span>'
+                : '<span class="status-badge in-use">IN-USE</span>';
+
+            let content = `
+                <div class="modal-section">
+                    <div class="modal-section-title">▸ BASIC INFO</div>
+                    <div class="modal-info-row">
+                        <div class="modal-label">TYPE:</div>
+                        <div class="modal-value">${resource.type.toUpperCase()}</div>
+                    </div>
+                    <div class="modal-info-row">
+                        <div class="modal-label">HOSTNAME:</div>
+                        <div class="modal-value">${resource.hostname}</div>
+                    </div>
+                    <div class="modal-info-row">
+                        <div class="modal-label">ROW:</div>
+                        <div class="modal-value">${resource.row}</div>
+                    </div>
+                    <div class="modal-info-row">
+                        <div class="modal-label">SLOT:</div>
+                        <div class="modal-value">#${resource.index}</div>
+                    </div>
+                    <div class="modal-info-row">
+                        <div class="modal-label">STATUS:</div>
+                        <div class="modal-value">${statusBadge}</div>
+                    </div>
+                    ${resource.user ? `
+                    <div class="modal-info-row">
+                        <div class="modal-label">USER:</div>
+                        <div class="modal-value">${resource.user}</div>
+                    </div>
+                    ` : ''}
+                    ${resource.gpuType ? `
+                    <div class="modal-info-row">
+                        <div class="modal-label">GPU TYPE:</div>
+                        <div class="modal-value">${resource.gpuType}</div>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <div class="modal-section">
+                    <div class="modal-section-title">▸ HOST STATUS</div>
+                    <div class="modal-info-row">
+                        <div class="modal-label">HOST STATUS:</div>
+                        <div class="modal-value">${resource.status}</div>
+                    </div>
+                    <div class="modal-info-row">
+                        <div class="modal-label">UTILIZATION:</div>
+                        <div class="modal-value">${resource.utilization}%</div>
+                    </div>
+                </div>
+            `;
+
+            // Add load metrics if available
+            if (resource.load && Object.keys(resource.load).length > 0) {
+                const load = resource.load;
+                content += `
+                    <div class="modal-section">
+                        <div class="modal-section-title">▸ LOAD METRICS</div>
+                        <div class="bar-graph">
+                            ${load.r15s !== undefined ? createBarGraph('15s', load.r15s, 100) : ''}
+                            ${load.r1m !== undefined ? createBarGraph('1min', load.r1m, 100) : ''}
+                            ${load.r15m !== undefined ? createBarGraph('15min', load.r15m, 100) : ''}
+                            ${load.ut !== undefined ? createBarGraph('CPU %', load.ut, 100) : ''}
+                        </div>
+                    </div>
+
+                    <div class="modal-section">
+                        <div class="modal-section-title">▸ SYSTEM RESOURCES</div>
+                        <div class="bar-graph">
+                            ${load.mem !== undefined ? createBarGraph('Memory', load.mem, 4000000) : ''}
+                            ${load.io !== undefined ? createBarGraph('I/O', load.io, 1000) : ''}
+                            ${load.tmp !== undefined ? createBarGraph('Temp', load.tmp / 1000, 400) : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            modalContent.innerHTML = content;
+            modalOverlay.classList.add('visible');
+        }
+
+        function closeModal() {
+            modalOverlay.classList.remove('visible');
+        }
+
+        // Click anywhere on modal or overlay to close
+        modalOverlay.addEventListener('click', closeModal);
+        modal.addEventListener('click', closeModal);
+
+        // Canvas click handler
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const gridX = Math.floor(mouseX / PIXEL_SIZE);
+            const gridY = Math.floor(mouseY / PIXEL_SIZE);
+
+            const resource = resources.find(r => r.x === gridX && r.y === gridY);
+
+            if (resource) {
+                showModal(resource);
             }
         });
 
