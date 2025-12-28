@@ -400,7 +400,7 @@
         class HostnameColorStrategy extends ColorStrategy {
             initialize(resources) {
                 const hostnames = Array.from(new Set(resources.map(r => r.hostname))).sort();
-                const colors = generateDistinctColors(hostnames.length);
+                const colors = generateRandomColors(hostnames.length);
                 hostnames.forEach((hostname, i) => {
                     this.colorMap.set(hostname, colors[i]);
                 });
@@ -430,7 +430,7 @@
         class RowColorStrategy extends ColorStrategy {
             initialize(resources) {
                 const rows = Array.from(new Set(resources.map(r => r.row))).sort();
-                const colors = generateDistinctColors(rows.length);
+                const colors = generateRandomColors(rows.length);
                 rows.forEach((row, i) => {
                     this.colorMap.set(row, colors[i]);
                 });
@@ -653,6 +653,17 @@
                 const hue = (i * 360 / count) % 360;
                 const saturation = 70;
                 const lightness = 60;
+                colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
+            }
+            return colors;
+        }
+
+        function generateRandomColors(count) {
+            const colors = [];
+            for (let i = 0; i < count; i++) {
+                const hue = Math.random() * 360;
+                const saturation = 60 + Math.random() * 20;
+                const lightness = 50 + Math.random() * 20;
                 colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
             }
             return colors;
