@@ -1281,10 +1281,8 @@
                 // Initialize color strategies
                 initializeColorStrategies();
 
-                // Apply default layout strategy
-                const layoutStrategy = new HostnameHierarchyLayout();
-                applyLayout(layoutStrategy);
-                draw();
+                // Apply layout with proper reflow (accounts for zoom level)
+                reflowLayout();
                 populateLegend();
 
                 // Apply legend state from URL
