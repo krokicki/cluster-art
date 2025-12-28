@@ -541,6 +541,43 @@
         const ZOOM_STEP = 0.1;
         const MIN_CANVAS_SIZE = 200;
 
+        // URL State Management
+        function saveStateToURL() {
+            const state = {
+                x: Math.round(canvasX),
+                y: Math.round(canvasY),
+                w: Math.round(canvasWidth),
+                h: Math.round(canvasHeight),
+                z: zoomLevel.toFixed(2),
+                m: currentColorMode,
+                l: legendExpanded ? 1 : 0
+            };
+
+            const hash = Object.entries(state)
+                .map(([key, value]) => `${key}=${value}`)
+                .join('&');
+
+            // Update URL without triggering page reload
+            history.replaceState(null, '', `#${hash}`);
+        }
+
+        function loadStateFromURL() {
+            const hash = window.location.hash.substring(1); // Remove '#'
+            if (!hash) return false;
+
+            const params = new URLSearchParams(hash);
+
+            if (params.has('x')) canvasX = parseFloat(params.get('x'));
+            if (params.has('y')) canvasY = parseFloat(params.get('y'));
+            if (params.has('w')) canvasWidth = parseFloat(params.get('w'));
+            if (params.has('h')) canvasHeight = parseFloat(params.get('h'));
+            if (params.has('z')) zoomLevel = parseFloat(params.get('z'));
+            if (params.has('m')) currentColorMode = parseInt(params.get('m'));
+            if (params.has('l')) legendExpanded = params.get('l') === '1';
+
+            return true;
+        }
+
         let gridWidth, gridHeight;
         let resources = [];
         let userColorMap = new Map();
@@ -1219,12 +1256,20 @@
 
         // Initialize visualization
         async function init() {
-            // Set initial canvas size
-            canvasWidth = 1200;
-            canvasHeight = 800;
+            // Load state from URL if present
+            const hasURLState = loadStateFromURL();
 
-            // Center the canvas on page
-            centerCanvas();
+            // Set initial canvas size (if not loaded from URL)
+            if (!hasURLState) {
+                canvasWidth = 1200;
+                canvasHeight = 800;
+                // Center the canvas on page
+                centerCanvas();
+            } else {
+                // Apply loaded position and size
+                updateCanvasPosition();
+            }
+
             updateCanvasSize();
 
             // Initialize zoom display
@@ -1241,6 +1286,14 @@
                 applyLayout(layoutStrategy);
                 draw();
                 populateLegend();
+
+                // Apply legend state from URL
+                if (hasURLState && legendExpanded) {
+                    legend.classList.add('expanded');
+                }
+
+                // Save initial state to URL
+                saveStateToURL();
             } else {
                 // Fallback: show error message
                 ctx.fillStyle = '#ffffff';
@@ -1344,10 +1397,12 @@
             if (isDragging) {
                 isDragging = false;
                 container.classList.remove('dragging');
+                saveStateToURL();
             }
             if (isResizing) {
                 isResizing = false;
                 resizeHandle = null;
+                saveStateToURL();
             }
         });
 
@@ -1446,6 +1501,14 @@
             }
         });
 
+        canvas.addEventListener('touchend', (e) => {
+            // Save state after touch gesture ends (e.g., after pinch-to-zoom)
+            if (lastTouchDistance > 0) {
+                saveStateToURL();
+                lastTouchDistance = 0;
+            }
+        });
+
         function showTooltip(resource) {
             const userText = resource.isIdle
                 ? '<span class="idle">IDLE</span>'
@@ -1475,6 +1538,7 @@
                 currentColorMode = mode;
                 populateLegend();
                 draw();
+                saveStateToURL();
             }
         }
 
@@ -1490,6 +1554,7 @@
             } else {
                 legend.classList.remove('expanded');
             }
+            saveStateToURL();
         }
 
         legendTitle.addEventListener('click', toggleLegend);
@@ -1500,6 +1565,7 @@
                 zoomLevel = Math.min(MAX_ZOOM, zoomLevel + ZOOM_STEP);
                 updateZoomDisplay();
                 reflowLayout();
+                saveStateToURL();
             }
         }
 
@@ -1508,6 +1574,7 @@
                 zoomLevel = Math.max(MIN_ZOOM, zoomLevel - ZOOM_STEP);
                 updateZoomDisplay();
                 reflowLayout();
+                saveStateToURL();
             }
         }
 
@@ -1534,6 +1601,7 @@
             zoomLevel = 1.0;
             updateZoomDisplay();
             reflowLayout();
+            saveStateToURL();
         });
 
         // Keyboard shortcuts
