@@ -427,7 +427,7 @@
             'UTILIZATION',
             'SLOT STATUS',
             'HOST STATUS',
-            'MEMORY'
+            'FREE MEMORY'
         ];
 
         let currentColorMode = 1;
@@ -836,22 +836,25 @@
             }
         }
 
-        // Mode 9: By Memory Load
+        // Mode 9: By Free Memory
         class MemoryLoadColorStrategy extends ColorStrategy {
             initialize(resources) {
                 const mems = resources.map(r => r.load?.mem || 0);
-                this.min = Math.min(...mems);
+                this.min = 0; // Start at zero
                 this.max = Math.max(...mems);
             }
 
             getColor(resource) {
                 const mem = resource.load?.mem || 0;
-                return getHeatMapColor(mem, this.min, this.max);
+                // Inverted: low memory (0) = red, high memory = blue
+                const normalized = Math.max(0, Math.min(1, (mem - this.min) / (this.max - this.min)));
+                const hue = normalized * 240; // 0 = red (low), 240 = blue (high)
+                return `hsl(${hue}, 80%, 50%)`;
             }
 
             getLegendItems(resources) {
                 const mems = resources.map(r => r.load?.mem || 0);
-                const min = Math.min(...mems);
+                const min = 0; // Start at zero
                 const max = Math.max(...mems);
                 const range = max - min;
                 const step = range / 5;
@@ -865,9 +868,13 @@
                         return mem >= rangeMin && mem < (i === 4 ? rangeMax + 1 : rangeMax);
                     }).length;
 
+                    // Inverted color: low = red, high = blue
+                    const normalized = ((rangeMin + rangeMax) / 2) / max;
+                    const hue = normalized * 240;
+
                     ranges.push({
                         label: `${formatMemoryGB(rangeMin)}-${formatMemoryGB(rangeMax)} GB`,
-                        color: getHeatMapColor((rangeMin + rangeMax) / 2, min, max),
+                        color: `hsl(${hue}, 80%, 50%)`,
                         count: count
                     });
                 }
