@@ -1282,7 +1282,7 @@
 
             if (resource) {
                 currentResource = resource;
-                showTooltip(resource, e.clientY);
+                showTooltip(resource);
             } else {
                 hideTooltip();
             }
@@ -1416,7 +1416,7 @@
             }
         });
 
-        function showTooltip(resource, mouseY) {
+        function showTooltip(resource) {
             const userText = resource.isIdle
                 ? '<span class="idle">IDLE</span>'
                 : `<span class="value">${resource.user}</span>`;
@@ -1428,16 +1428,7 @@
                 <span class="label">USER:</span> ${userText}
             `;
 
-            // Position tooltip based on mouse Y position
-            const bottomThreshold = window.innerHeight - 150;
-            if (mouseY > bottomThreshold) {
-                tooltip.classList.remove('bottom');
-                tooltip.classList.add('top');
-            } else {
-                tooltip.classList.remove('top');
-                tooltip.classList.add('bottom');
-            }
-
+            // Always show tooltip at the bottom
             tooltip.classList.add('visible');
             draw(); // Redraw to show hover border
         }
@@ -1587,7 +1578,7 @@
             let column1 = `
                 <div>
                     <div class="modal-section">
-                        <div class="modal-section-title">▸ BASIC INFO</div>
+                        <div class="modal-section-title">BASIC INFO</div>
                         <div class="modal-info-row">
                             <div class="modal-label">TYPE:</div>
                             <div class="modal-value">${resource.type.toUpperCase()}</div>
@@ -1627,7 +1618,7 @@
                     </div>
 
                     <div class="modal-section">
-                        <div class="modal-section-title">▸ HOST STATUS</div>
+                        <div class="modal-section-title">HOST STATUS</div>
                         <div class="modal-info-row">
                             <div class="modal-label">HOST STATUS:</div>
                             <div class="modal-value">${resource.status}</div>
@@ -1649,7 +1640,7 @@
 
                 column2 += `
                     <div class="modal-section">
-                        <div class="modal-section-title">▸ USAGE</div>
+                        <div class="modal-section-title">USAGE</div>
                         ${memoryGB ? `
                         <div class="modal-info-row">
                             <div class="modal-label">MEMORY AVAIL:</div>
