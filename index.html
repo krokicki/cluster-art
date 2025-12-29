@@ -192,7 +192,7 @@
             position: fixed;
             top: 20px;
             left: 20px;
-            width: 160px;
+            width: 180px;
             background: #1a1a2e;
             border: 4px solid #00ff00;
             box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
@@ -607,12 +607,13 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            min-width: 200px;
+            width: 180px;
             background: #1a1a2e;
             border: 4px solid #00ff00;
             box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
             font-family: 'Press Start 2P', monospace;
             font-size: 9px;
+            line-height: 2;
             color: #00ff00;
             z-index: 999;
             transition: all 0.3s ease-out;
@@ -726,14 +727,18 @@
         }
 
         .time-travel-button {
+            height: 40px;
             background: #1a1a2e;
             border: 2px solid #00ff00;
             color: #00ff00;
             font-family: 'Press Start 2P', monospace;
             font-size: 8px;
-            padding: 6px 10px;
+            padding: 0 10px;
             cursor: pointer;
             box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .time-travel-button:hover {
@@ -773,12 +778,13 @@
         }
 
         #time-travel-speed {
+            height: 40px;
             background: #1a1a2e;
             border: 2px solid #00ff00;
             color: #00ff00;
             font-family: 'Press Start 2P', monospace;
             font-size: 8px;
-            padding: 4px;
+            padding: 0 8px;
             cursor: pointer;
         }
 
@@ -925,6 +931,7 @@
             <div id="time-travel-controls">
                 <button id="time-travel-prev" class="time-travel-button" title="Previous snapshot">|&lt;</button>
                 <button id="time-travel-play" class="time-travel-button" title="Play/Pause">&#9654;</button>
+                <button id="time-travel-loop" class="time-travel-button" title="Loop playback" style="font-size: 16px;">&#8635;</button>
                 <button id="time-travel-next" class="time-travel-button" title="Next snapshot">&gt;|</button>
                 <select id="time-travel-speed">
                     <option value="100" selected>100x</option>
@@ -992,6 +999,7 @@
         let timeTravelMode = false;
         let timeTravelTimestamp = null;
         let timeTravelPlaying = false;
+        let timeTravelLoop = false;
         let timeTravelSpeed = 100;
         let timeTravelExpanded = false;
         let availableTimepoints = null;
@@ -1856,9 +1864,21 @@
 
                     preloadAdjacentSnapshots(currentTimepointIndex);
                 } else {
-                    // Reached end - switch to LIVE mode
-                    returnToLive();
-                    return;
+                    // Reached end
+                    if (timeTravelLoop) {
+                        // Loop back to beginning
+                        currentTimepointIndex = 0;
+                        const firstTimestamp = availableTimepoints.timestamps[0];
+                        document.getElementById('time-travel-slider').value = 0;
+                        timeTravelTimestamp = firstTimestamp;
+                        loadClusterDataAt(firstTimestamp);
+                        updateTimeTravelDisplay();
+                        preloadAdjacentSnapshots(0);
+                    } else {
+                        // Switch to LIVE mode
+                        returnToLive();
+                        return;
+                    }
                 }
             }
 
@@ -2500,6 +2520,12 @@
                     }
                     startPlayback();
                 }
+            });
+
+            // Loop toggle
+            document.getElementById('time-travel-loop').addEventListener('click', () => {
+                timeTravelLoop = !timeTravelLoop;
+                document.getElementById('time-travel-loop').classList.toggle('active', timeTravelLoop);
             });
 
             // Prev button
