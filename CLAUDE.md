@@ -1,100 +1,176 @@
-# Cluster Visualization - JSON Schema
+# Cluster Visualization
 
-This is an artistic cluster visualization for HPC clusters. It prioritizes art over usefulness. The data comes from a JSON file that is reserved by the backend in order to add CORS headers. It has a vintage video game aesthetic, and is easy to use.
+Artistic HPC cluster visualization with a vintage video game aesthetic. Prioritizes visual appeal over utility.
 
-The project is managed using Pixi, and all commands should be executed using Pixi. Running the server can be done by `pixi run serve`.
+## Quick Start
 
-## JSON Structure
+```bash
+pixi run serve   # Starts server at http://localhost:8000
+```
+
+## Project Structure
+
+```
+cluster-art/
+├── app.py         # FastAPI backend (143 lines)
+├── index.html     # Frontend SPA with all CSS/JS (2165 lines)
+├── pixi.toml      # Project config and dependencies
+└── CLAUDE.md      # This file
+```
+
+## Architecture Overview
+
+```
+Browser (index.html)          FastAPI (app.py)           Upstream
+┌─────────────────┐          ┌──────────────────┐       ┌─────────────┐
+│ Canvas 2D API   │◄────────►│ /api/cluster-    │◄─────►│ cluster-    │
+│ 9 color modes   │  JSON    │ status (cached)  │ every │ status.int. │
+│ Pan/zoom/modal  │          │                  │ 2min  │ janelia.org │
+└─────────────────┘          └──────────────────┘       └─────────────┘
+```
+
+## Backend (app.py)
+
+- **Framework**: FastAPI with Uvicorn
+- **Endpoints**:
+  - `GET /` - Serves index.html
+  - `GET /api/cluster-status` - Returns cached cluster data
+  - `GET /api/health` - Health check
+- **Background task**: Fetches upstream data every 2 minutes, caches in memory
+- **CORS**: Enabled for all origins
+
+### Key Backend Constants
+
+```python
+UPSTREAM_URL = "https://cluster-status.int.janelia.org/api/cluster-status"
+FETCH_INTERVAL = 120  # seconds
+```
+
+## Frontend (index.html)
+
+Single-file SPA with HTML, CSS, and JavaScript combined.
+
+### Key Classes
+
+**Resource** - Represents a single CPU or GPU slot:
+```javascript
+class Resource {
+  hostname, type, index, user, x, y, gpuType, hardwareGroup,
+  utilization, status, load, jobId, jobName
+}
+```
+
+**Layout Strategies** - Calculate grid positions:
+- `HostnameHierarchyLayout` - Groups by hostname (default)
+- `UserGroupLayout` - Groups by user (alternative)
+
+**Color Strategies** - 9 visualization modes:
+| Key | Strategy               | Description                      |
+|-----|------------------------|----------------------------------|
+| 1   | UserColorStrategy      | Distinct color per user          |
+| 2   | HostnameColorStrategy  | Random color per hostname        |
+| 3   | RowColorStrategy       | Color by row prefix (e.g. "h04") |
+| 4   | TypeColorStrategy      | Color by hardware group          |
+| 5   | GpuTypeColorStrategy   | Color by GPU type                |
+| 6   | UtilizationColorStrategy | Heat map by CPU utilization    |
+| 7   | StatusColorStrategy    | Green=in-use, gray=idle          |
+| 8   | HostStatusColorStrategy | Color by host status            |
+| 9   | MemoryLoadColorStrategy | Heat map by available memory    |
+
+### Key Frontend Constants
+
+```javascript
+const PIXEL_SIZE = 8;        // Base square size in pixels
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 3.0;
+const ZOOM_STEP = 0.1;
+const MIN_CANVAS_SIZE = 200;
+// Default canvas: 1200x800
+```
+
+### Data Flow
+
+1. `init()` parses URL state, sets up canvas, calls `loadClusterData()`
+2. `loadClusterData()` fetches `/api/cluster-status`
+3. Response processed into `Resource` objects from `hostDetails`
+4. Job info looked up from `raw.jobs` and `raw.gpu_attribution`
+5. Color strategies initialized with resources
+6. Layout strategy calculates x,y positions
+7. `draw()` renders to canvas using current color strategy
+
+### State Persistence
+
+All UI state saved to URL hash:
+- Canvas position and size
+- Zoom level
+- Color mode (1-9)
+- Panel visibility (help, legend)
+
+### Adding a New Color Strategy
+
+1. Create class implementing:
+   ```javascript
+   class MyColorStrategy {
+     initialize(resources) { /* precompute colors */ }
+     getColor(resource) { /* return {r, g, b} */ }
+     getLegendItems(resources) { /* return [{color, label, count}] */ }
+   }
+   ```
+2. Add to `colorStrategies` array
+3. Update `COLOR_MODES` count
+4. Add keyboard handler in `handleKeyDown`
+
+### Adding a New Layout Strategy
+
+1. Create class implementing:
+   ```javascript
+   class MyLayout {
+     apply(resources, canvasWidth, canvasHeight) {
+       // Set resource.x and resource.y for each resource
+       return { width, height }; // required grid dimensions
+     }
+   }
+   ```
+2. Replace `currentLayoutStrategy` assignment
+
+## JSON Schema
+
+### Primary Data Structure
 
 ```typescript
 interface ClusterStatus {
-  // Summary statistics
-  hosts: {
-    total: number;
-    active: number;
-  };
-  cpus: {
-    total: number;
-    used: number;
-    idle: number;
-  };
-  gpus: {
-    total: number;
-    used: number;
-    idle: number;
-  };
-
-  // Detailed host information
+  hosts: { total: number; active: number };
+  cpus: { total: number; used: number; idle: number };
+  gpus: { total: number; used: number; idle: number };
   hostDetails: HostDetail[];
-
-  // Hardware groupings
-  hardwareGroups: {
-    [groupName: string]: string[]; // group name -> array of hostnames
-    // Known groups:
-    // "CPU + T4", "CPU + L4", "CPU + 8GPU L4", "8GPU L4",
-    // "4GPU A100", "8GPU H100", "8GPU H200", "GH200", "7GPU L4"
-  };
-
-  // User statistics
+  hardwareGroups: { [groupName: string]: string[] };
   activeUsers: number;
-  userJobStats: {
-    [username: string]: {
-      run: number;
-      pending: number;
-      suspended: number;
-      slots: number;
-      gpus: number;
-    };
-  };
-
-  // Metadata
+  userJobStats: { [username: string]: UserStats };
   motd: string;
-  fetchedAt: string; // ISO 8601 timestamp
-
-  // Raw data from LSF
-  raw: {
-    jobs: {
-      all: Job[];
-      gpu_jobs: GpuJob[];
-    };
-    hosts: RawHost[];
-    metadata: {
-      generated_at: string;
-      total_jobs: number;
-      running_jobs: number;
-      pending_jobs: number;
-      suspended_jobs: number;
-      total_hosts: number;
-      gpu_jobs: number;
-    };
-    gpu_attribution: GpuAttribution[];
-  };
+  fetchedAt: string; // ISO 8601
+  raw: { jobs: Jobs; hosts: RawHost[]; metadata: Metadata; gpu_attribution: GpuAttribution[] };
 }
+```
 
+### HostDetail (main visualization data)
+
+```typescript
 interface HostDetail {
   hostname: string;          // e.g., "h04u08"
   status: string;            // e.g., "closed_Full", "ok"
-  cpus: {
-    total: number;
-    used: number;
-    idle: number;
-  };
-  gpus: {
-    total: number;
-    used: number;
-    idle: number;
-  };
+  cpus: { total: number; used: number; idle: number };
+  gpus: { total: number; used: number; idle: number };
   utilization: number;       // 0-100 percentage
   users: string[];           // unique users on this host
   gpu_type: string;          // e.g., "NVIDIAH200", "TeslaT4", "NVIDIAL4"
-  cpuSlots: string[];        // array of usernames (or "" for idle)
-  gpuSlots: string[];        // array of usernames (or "" for idle)
+  cpuSlots: string[];        // usernames or "" for idle
+  gpuSlots: string[];        // usernames or "" for idle
   load: {
     r15s: number;            // load average 15 seconds
     r1m: number;             // load average 1 minute
     r15m: number;            // load average 15 minutes
     ut: number;              // CPU utilization percentage
-    mem: number;             // memory usage in MB
+    mem: number;             // memory in MB
     io: number;              // disk I/O in KB/s
     pg: number;              // paging
     tmp: number;             // temp space in MB
@@ -102,7 +178,11 @@ interface HostDetail {
     load_status: string;     // e.g., "ok"
   };
 }
+```
 
+### Job Info (for modal details)
+
+```typescript
 interface Job {
   job_id: string;
   job_name: string;
@@ -115,34 +195,6 @@ interface Job {
   run_time_seconds: number;
 }
 
-interface GpuJob {
-  job_id: string;
-  job_name: string;
-  user: string;
-  status: string;
-  host: string;
-  num_gpus: number;
-  gpu_ids: number[];
-  assignment_method: string;
-}
-
-interface RawHost {
-  hostname: string;
-  max_slots: number;
-  status: string;
-  gpus: any[];
-  load_status: string;
-  r15s: number;
-  r1m: number;
-  r15m: number;
-  ut: number;
-  pg: number;
-  io: number;
-  tmp: number;
-  swp: number;
-  mem: number;
-}
-
 interface GpuAttribution {
   hostname: string;
   gpu_id: number;
@@ -153,10 +205,22 @@ interface GpuAttribution {
 }
 ```
 
-## Usage Notes
+## Styling
 
-- `cpuSlots` and `gpuSlots` arrays contain username strings for allocated slots, or empty string `""` for idle slots
-- Memory (`load.mem`) is in MB
-- Disk I/O (`load.io`) is in KB/s
-- Temp space (`load.tmp`) is in MB and is unbounded (can exceed 100GB)
-- To find which hardware group a host belongs to, search through `hardwareGroups` values
+- **Theme**: Retro CRT monitor (green on black with glow)
+- **Font**: "Press Start 2P" (Google Fonts)
+- **Primary colors**: Lime (#00ff00), Cyan (#00ffff), Yellow (#ffff00), Magenta (#ff00ff)
+- **Shadow**: 8px offset black
+
+## User Interactions
+
+| Action | Effect |
+|--------|--------|
+| Drag canvas | Pan view |
+| Drag corners | Resize canvas |
+| +/- buttons or scroll | Zoom (0.5x - 3.0x) |
+| Hover resource | Show tooltip |
+| Click resource | Open detail modal |
+| Arrow keys (in modal) | Navigate resources |
+| Keys 1-9 | Change color mode |
+| ? | Toggle help panel |
