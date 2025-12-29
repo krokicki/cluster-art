@@ -600,6 +600,191 @@
         #modal-nav-right {
             right: 20px;
         }
+
+        /* Time Travel Panel */
+        #time-travel {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 200px;
+            background: #1a1a2e;
+            border: 4px solid #00ff00;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            color: #00ff00;
+            z-index: 999;
+            transition: all 0.3s ease-out;
+            overflow: hidden;
+        }
+
+        #time-travel.expanded {
+            min-width: 400px;
+        }
+
+        #time-travel-title {
+            color: #ffff00;
+            text-align: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        #time-travel-title:hover {
+            background: #00ff00;
+            color: #1a1a2e;
+        }
+
+        #time-travel-title::after {
+            content: ' [T]';
+            color: #00ff00;
+            font-size: 8px;
+        }
+
+        #time-travel-title:hover::after {
+            color: #1a1a2e;
+        }
+
+        #time-travel-content {
+            max-height: 0;
+            overflow: hidden;
+            opacity: 0;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+        }
+
+        #time-travel.expanded #time-travel-content {
+            max-height: 200px;
+            opacity: 1;
+        }
+
+        #time-travel-display {
+            padding: 12px 16px;
+            border-top: 2px solid #00ff00;
+            text-align: center;
+            font-size: 10px;
+        }
+
+        #time-travel-timestamp {
+            color: #00ffff;
+        }
+
+        #time-travel-timestamp.live {
+            color: #ff4444;
+        }
+
+        #time-travel-slider-container {
+            padding: 8px 16px;
+        }
+
+        #time-travel-slider {
+            width: 100%;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            background: #0a0a1a;
+            border: 2px solid #00ff00;
+            outline: none;
+        }
+
+        #time-travel-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #00ff00;
+            cursor: pointer;
+            border: 2px solid #ffff00;
+        }
+
+        #time-travel-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #00ff00;
+            cursor: pointer;
+            border: 2px solid #ffff00;
+        }
+
+        #time-travel-range {
+            display: flex;
+            justify-content: space-between;
+            font-size: 7px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        #time-travel-controls {
+            padding: 12px 16px;
+            border-top: 2px solid #00ff00;
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .time-travel-button {
+            background: #1a1a2e;
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.8);
+        }
+
+        .time-travel-button:hover {
+            background: #00ff00;
+            color: #1a1a2e;
+        }
+
+        .time-travel-button:active {
+            transform: translate(2px, 2px);
+            box-shadow: none;
+        }
+
+        .time-travel-button.active {
+            background: #00ff00;
+            color: #1a1a2e;
+        }
+
+        .time-travel-live {
+            color: #ff4444;
+            border-color: #ff4444;
+        }
+
+        .time-travel-live:hover {
+            background: #ff4444;
+            color: #1a1a2e;
+        }
+
+        .time-travel-live.active {
+            background: #ff4444;
+            color: #1a1a2e;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        #time-travel-speed {
+            background: #1a1a2e;
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            padding: 4px;
+            cursor: pointer;
+        }
+
+        #time-travel-speed option {
+            background: #1a1a2e;
+        }
     </style>
 </head>
 <body>
@@ -702,6 +887,10 @@
                     <div class="help-desc">Toggle legend</div>
                 </div>
                 <div class="help-item">
+                    <div class="help-key">T</div>
+                    <div class="help-desc">Toggle time travel</div>
+                </div>
+                <div class="help-item">
                     <div class="help-key">?</div>
                     <div class="help-desc">Toggle this help</div>
                 </div>
@@ -719,6 +908,31 @@
         <div id="legend-content">
             <div id="current-mode"></div>
             <div id="legend-items"></div>
+        </div>
+    </div>
+
+    <div id="time-travel">
+        <div id="time-travel-title">TIME TRAVEL</div>
+        <div id="time-travel-content">
+            <div id="time-travel-display"><span id="time-travel-timestamp">LIVE</span></div>
+            <div id="time-travel-slider-container">
+                <input type="range" id="time-travel-slider" min="0" max="100" value="100">
+                <div id="time-travel-range">
+                    <span id="time-travel-first"></span>
+                    <span id="time-travel-last"></span>
+                </div>
+            </div>
+            <div id="time-travel-controls">
+                <button id="time-travel-prev" class="time-travel-button" title="Previous snapshot">|&lt;</button>
+                <button id="time-travel-play" class="time-travel-button" title="Play/Pause">&#9654;</button>
+                <button id="time-travel-next" class="time-travel-button" title="Next snapshot">&gt;|</button>
+                <select id="time-travel-speed">
+                    <option value="100" selected>100x</option>
+                    <option value="1000">1000x</option>
+                    <option value="10000">10000x</option>
+                </select>
+                <button id="time-travel-live" class="time-travel-button time-travel-live active" title="Return to LIVE">LIVE</button>
+            </div>
         </div>
     </div>
 
@@ -772,6 +986,19 @@
         const MAX_ZOOM = 3.0;
         const ZOOM_STEP = 0.1;
         const MIN_CANVAS_SIZE = 200;
+        const PRELOAD_BUFFER = 3;
+
+        // Time travel state
+        let timeTravelMode = false;
+        let timeTravelTimestamp = null;
+        let timeTravelPlaying = false;
+        let timeTravelSpeed = 100;
+        let timeTravelExpanded = false;
+        let availableTimepoints = null;
+        let currentTimepointIndex = 0;
+        let preloadedSnapshots = new Map();
+        let playbackAnimationId = null;
+        let lastPlaybackTime = 0;
 
         // URL State Management
         function saveStateToURL() {
@@ -783,8 +1010,15 @@
                 z: zoomLevel.toFixed(2),
                 m: currentColorMode,
                 l: legendExpanded ? 1 : 0,
-                h: helpExpanded ? 1 : 0
+                h: helpExpanded ? 1 : 0,
+                te: timeTravelExpanded ? 1 : 0
             };
+
+            // Only add time travel state if not in LIVE mode
+            if (timeTravelMode && timeTravelTimestamp) {
+                state.tt = timeTravelTimestamp;
+                state.ts = timeTravelSpeed;
+            }
 
             const hash = Object.entries(state)
                 .map(([key, value]) => `${key}=${value}`)
@@ -808,6 +1042,12 @@
             if (params.has('m')) currentColorMode = parseInt(params.get('m'));
             if (params.has('l')) legendExpanded = params.get('l') === '1';
             if (params.has('h')) helpExpanded = params.get('h') === '1';
+            if (params.has('te')) timeTravelExpanded = params.get('te') === '1';
+            if (params.has('tt')) {
+                timeTravelTimestamp = parseInt(params.get('tt'));
+                timeTravelMode = true;
+            }
+            if (params.has('ts')) timeTravelSpeed = parseFloat(params.get('ts'));
 
             return true;
         }
@@ -1385,6 +1625,299 @@
             return array;
         }
 
+        // Time Travel Functions
+        function formatTimestamp(unixTimestamp) {
+            const date = new Date(unixTimestamp * 1000);
+            return date.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function formatRelativeTime(unixTimestamp) {
+            const now = Date.now() / 1000;
+            const diff = now - unixTimestamp;
+
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)} hrs ago`;
+            return `${Math.floor(diff / 86400)} days ago`;
+        }
+
+        function updateTimeTravelDisplay() {
+            const displayEl = document.getElementById('time-travel-timestamp');
+
+            if (!timeTravelMode || !timeTravelTimestamp) {
+                displayEl.textContent = 'LIVE';
+                displayEl.classList.add('live');
+            } else {
+                const formatted = formatTimestamp(timeTravelTimestamp);
+                const relative = formatRelativeTime(timeTravelTimestamp);
+                displayEl.textContent = `${formatted} (${relative})`;
+                displayEl.classList.remove('live');
+            }
+        }
+
+        async function initTimeTravel() {
+            try {
+                const response = await fetch('/api/timepoints');
+                if (!response.ok) {
+                    console.error('Failed to fetch timepoints:', response.status);
+                    return;
+                }
+                availableTimepoints = await response.json();
+                console.log('Time travel initialized with', availableTimepoints.count, 'timepoints');
+
+                if (availableTimepoints.timestamps && availableTimepoints.timestamps.length > 0) {
+                    const slider = document.getElementById('time-travel-slider');
+                    slider.min = 0;
+                    slider.max = availableTimepoints.timestamps.length - 1;
+                    slider.value = slider.max;
+                    currentTimepointIndex = availableTimepoints.timestamps.length - 1;
+
+                    // Update range labels
+                    document.getElementById('time-travel-first').textContent =
+                        formatTimestamp(availableTimepoints.first);
+                    document.getElementById('time-travel-last').textContent =
+                        formatTimestamp(availableTimepoints.last);
+
+                    updateTimeTravelDisplay();
+                } else {
+                    console.log('No timepoints available for time travel');
+                }
+            } catch (error) {
+                console.error('Failed to initialize time travel:', error);
+            }
+        }
+
+        async function loadClusterDataAt(timestamp) {
+            // Check preloaded cache first
+            if (preloadedSnapshots.has(timestamp)) {
+                const data = preloadedSnapshots.get(timestamp);
+                processClusterData(data);
+                return true;
+            }
+
+            try {
+                const response = await fetch(`/api/cluster-status/${timestamp}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+
+                // Cache for potential replay
+                preloadedSnapshots.set(timestamp, data);
+
+                // Limit cache size
+                if (preloadedSnapshots.size > 20) {
+                    const oldestKey = preloadedSnapshots.keys().next().value;
+                    preloadedSnapshots.delete(oldestKey);
+                }
+
+                processClusterData(data);
+                return true;
+            } catch (error) {
+                console.error(`Failed to load data for ${timestamp}:`, error);
+                return false;
+            }
+        }
+
+        function processClusterData(data) {
+            // Extract resources from hostDetails (same logic as loadClusterData)
+            const allResources = [];
+            const allUsers = [];
+
+            data.hostDetails.forEach(host => {
+                const hardwareGroup = host.hardwareGroup || 'Unknown';
+                const cpuSlotsArray = sparseToArray(host.cpuSlots, host.cpus.total);
+                const gpuSlotsArray = sparseToArray(host.gpuSlots, host.gpus.total);
+
+                cpuSlotsArray.forEach((user, idx) => {
+                    const resource = new Resource(host.hostname, 'cpu', idx, user, host, hardwareGroup);
+                    if (user && data.raw?.jobs?.all) {
+                        const cpuJob = data.raw.jobs.all.find(job =>
+                            job.user === user &&
+                            job.status === 'RUN' &&
+                            job.exec_host && job.exec_host.includes(host.hostname)
+                        );
+                        if (cpuJob) {
+                            resource.jobId = cpuJob.job_id;
+                            resource.jobName = cpuJob.job_name;
+                        }
+                    }
+                    allResources.push(resource);
+                    if (user && user !== '') allUsers.push(user);
+                });
+
+                gpuSlotsArray.forEach((user, idx) => {
+                    const resource = new Resource(host.hostname, 'gpu', idx, user, host, hardwareGroup);
+                    if (data.raw?.gpu_attribution) {
+                        const gpuAttr = data.raw.gpu_attribution.find(attr =>
+                            attr.hostname === host.hostname && attr.gpu_id === idx
+                        );
+                        if (gpuAttr) {
+                            resource.jobId = gpuAttr.job_id;
+                            resource.jobName = gpuAttr.job_name;
+                        }
+                    }
+                    allResources.push(resource);
+                    if (user && user !== '') allUsers.push(user);
+                });
+            });
+
+            resources = allResources;
+            userColorMap = generateUserColors(allUsers);
+
+            // Re-initialize and redraw
+            initializeColorStrategies();
+            reflowLayout();
+            updateCurrentModeDisplay();
+            populateLegend();
+        }
+
+        async function preloadAdjacentSnapshots(centerIndex) {
+            if (!availableTimepoints?.timestamps) return;
+
+            const timestamps = availableTimepoints.timestamps;
+            const preloadPromises = [];
+
+            for (let offset = -PRELOAD_BUFFER; offset <= PRELOAD_BUFFER; offset++) {
+                if (offset === 0) continue;
+
+                const idx = centerIndex + offset;
+                if (idx < 0 || idx >= timestamps.length) continue;
+
+                const ts = timestamps[idx];
+                if (preloadedSnapshots.has(ts)) continue;
+
+                preloadPromises.push(
+                    fetch(`/api/cluster-status/${ts}`)
+                        .then(r => r.json())
+                        .then(data => preloadedSnapshots.set(ts, data))
+                        .catch(() => {})
+                );
+            }
+
+            await Promise.all(preloadPromises);
+        }
+
+        function startPlayback() {
+            if (timeTravelPlaying) return;
+
+            timeTravelPlaying = true;
+            lastPlaybackTime = performance.now();
+
+            document.getElementById('time-travel-play').innerHTML = '\u275A\u275A';
+            document.getElementById('time-travel-play').classList.add('active');
+
+            playbackLoop();
+        }
+
+        function stopPlayback() {
+            timeTravelPlaying = false;
+
+            if (playbackAnimationId) {
+                cancelAnimationFrame(playbackAnimationId);
+                playbackAnimationId = null;
+            }
+
+            document.getElementById('time-travel-play').innerHTML = '&#9654;';
+            document.getElementById('time-travel-play').classList.remove('active');
+        }
+
+        function playbackLoop() {
+            if (!timeTravelPlaying) return;
+            if (!availableTimepoints?.timestamps?.length) {
+                stopPlayback();
+                return;
+            }
+
+            const now = performance.now();
+            const elapsed = now - lastPlaybackTime;
+
+            // Real-time interval between snapshots (based on fetch interval = 120s)
+            const realInterval = 120 * 1000;
+            const adjustedInterval = realInterval / timeTravelSpeed;
+
+            if (elapsed >= adjustedInterval) {
+                lastPlaybackTime = now;
+
+                if (currentTimepointIndex < availableTimepoints.timestamps.length - 1) {
+                    currentTimepointIndex++;
+                    const nextTimestamp = availableTimepoints.timestamps[currentTimepointIndex];
+
+                    document.getElementById('time-travel-slider').value = currentTimepointIndex;
+
+                    timeTravelTimestamp = nextTimestamp;
+                    loadClusterDataAt(nextTimestamp);
+                    updateTimeTravelDisplay();
+
+                    preloadAdjacentSnapshots(currentTimepointIndex);
+                } else {
+                    // Reached end - switch to LIVE mode
+                    returnToLive();
+                    return;
+                }
+            }
+
+            playbackAnimationId = requestAnimationFrame(playbackLoop);
+        }
+
+        async function returnToLive() {
+            stopPlayback();
+
+            timeTravelMode = false;
+            timeTravelTimestamp = null;
+
+            document.getElementById('time-travel-live').classList.add('active');
+            updateTimeTravelDisplay();
+
+            // Reset slider to end
+            if (availableTimepoints?.timestamps) {
+                const slider = document.getElementById('time-travel-slider');
+                slider.value = slider.max;
+                currentTimepointIndex = availableTimepoints.timestamps.length - 1;
+            }
+
+            saveStateToURL();
+
+            // Resume with fresh data
+            const loaded = await loadClusterData();
+            if (loaded) {
+                initializeColorStrategies();
+                reflowLayout();
+                updateCurrentModeDisplay();
+                populateLegend();
+            }
+        }
+
+        function enterTimeTravelMode(timestamp, index) {
+            timeTravelMode = true;
+            timeTravelTimestamp = timestamp;
+            currentTimepointIndex = index;
+
+            document.getElementById('time-travel-live').classList.remove('active');
+            updateTimeTravelDisplay();
+
+            loadClusterDataAt(timestamp);
+            preloadAdjacentSnapshots(index);
+
+            saveStateToURL();
+        }
+
+        function toggleTimeTravel() {
+            timeTravelExpanded = !timeTravelExpanded;
+            const panel = document.getElementById('time-travel');
+            if (timeTravelExpanded) {
+                panel.classList.add('expanded');
+            } else {
+                panel.classList.remove('expanded');
+            }
+            saveStateToURL();
+        }
+
         // Load cluster data from JSON
         async function loadClusterData() {
             try {
@@ -1581,6 +2114,24 @@
                     }
                 }
 
+                // Initialize time travel panel
+                await initTimeTravel();
+
+                // Apply time travel state from URL if present
+                if (timeTravelTimestamp && availableTimepoints?.timestamps) {
+                    const index = availableTimepoints.timestamps.indexOf(timeTravelTimestamp);
+                    if (index !== -1) {
+                        currentTimepointIndex = index;
+                        document.getElementById('time-travel-slider').value = index;
+                        enterTimeTravelMode(timeTravelTimestamp, index);
+                    }
+                }
+
+                // Apply time travel panel expansion state
+                if (timeTravelExpanded) {
+                    document.getElementById('time-travel').classList.add('expanded');
+                }
+
                 // Save initial state to URL
                 saveStateToURL();
             } else {
@@ -1589,10 +2140,19 @@
                 ctx.font = '16px monospace';
                 ctx.fillText('Failed to load cluster-status.json', 20, 30);
             }
+
+            // Set up time travel event handlers (always, even if data load fails)
+            setupTimeTravelEventHandlers();
         }
 
         // Refresh data periodically without changing user settings
         async function refreshData() {
+            // Skip refresh if in time travel mode
+            if (timeTravelMode) {
+                console.log(`[${new Date().toISOString()}] Skipping refresh (time travel mode active)`);
+                return;
+            }
+
             console.log(`[${new Date().toISOString()}] Refreshing cluster data...`);
 
             const loaded = await loadClusterData();
@@ -1908,6 +2468,74 @@
             }
         }
 
+        // Set up time travel event handlers
+        function setupTimeTravelEventHandlers() {
+            console.log('Setting up time travel event handlers');
+
+            // Panel toggle
+            document.getElementById('time-travel-title').addEventListener('click', toggleTimeTravel);
+
+            // Slider change
+            document.getElementById('time-travel-slider').addEventListener('input', (e) => {
+                if (!availableTimepoints?.timestamps?.length) return;
+                const index = parseInt(e.target.value);
+                if (index >= 0 && index < availableTimepoints.timestamps.length) {
+                    const timestamp = availableTimepoints.timestamps[index];
+                    enterTimeTravelMode(timestamp, index);
+                }
+            });
+
+            // Play/Pause
+            document.getElementById('time-travel-play').addEventListener('click', () => {
+                if (!availableTimepoints?.timestamps?.length) {
+                    console.log('No timepoints available for playback');
+                    return;
+                }
+                if (timeTravelPlaying) {
+                    stopPlayback();
+                } else {
+                    if (!timeTravelMode) {
+                        // Start from beginning if currently LIVE
+                        enterTimeTravelMode(availableTimepoints.timestamps[0], 0);
+                    }
+                    startPlayback();
+                }
+            });
+
+            // Prev button
+            document.getElementById('time-travel-prev').addEventListener('click', () => {
+                if (!availableTimepoints?.timestamps?.length) return;
+                if (currentTimepointIndex > 0) {
+                    currentTimepointIndex--;
+                    const timestamp = availableTimepoints.timestamps[currentTimepointIndex];
+                    document.getElementById('time-travel-slider').value = currentTimepointIndex;
+                    enterTimeTravelMode(timestamp, currentTimepointIndex);
+                }
+            });
+
+            // Next button
+            document.getElementById('time-travel-next').addEventListener('click', () => {
+                if (!availableTimepoints?.timestamps?.length) return;
+                if (currentTimepointIndex < availableTimepoints.timestamps.length - 1) {
+                    currentTimepointIndex++;
+                    const timestamp = availableTimepoints.timestamps[currentTimepointIndex];
+                    document.getElementById('time-travel-slider').value = currentTimepointIndex;
+                    enterTimeTravelMode(timestamp, currentTimepointIndex);
+                }
+            });
+
+            // Speed selector
+            document.getElementById('time-travel-speed').addEventListener('change', (e) => {
+                timeTravelSpeed = parseFloat(e.target.value);
+                saveStateToURL();
+            });
+
+            // LIVE button
+            document.getElementById('time-travel-live').addEventListener('click', returnToLive);
+
+            console.log('Time travel event handlers attached');
+        }
+
         // Zoom button event listeners
         document.getElementById('zoom-in').addEventListener('click', zoomIn);
         document.getElementById('zoom-out').addEventListener('click', zoomOut);
@@ -1937,6 +2565,11 @@
             // ? to toggle help
             if (e.key === '?') {
                 toggleHelp();
+            }
+
+            // T to toggle time travel
+            if (e.key === 't' || e.key === 'T') {
+                toggleTimeTravel();
             }
 
             // Number keys 1-9 to switch color modes

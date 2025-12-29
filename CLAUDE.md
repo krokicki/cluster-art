@@ -38,8 +38,9 @@ Browser (index.html)          FastAPI (app.py)           Upstream
 - **Endpoints**:
   - `GET /` - Serves index.html
   - `GET /api/cluster-status` - Returns latest cached file (fetches if none exists)
+  - `GET /api/cluster-status/{timestamp}` - Returns cached file at or nearest to given unix timestamp
   - `GET /api/health` - Health check with cache info
-  - `GET /api/timepoints` - Returns `{first, last, count}` for cached files (unix timestamps)
+  - `GET /api/timepoints` - Returns `{first, last, count, timestamps[]}` for all cached files
 - **Background task**: Fetches upstream data periodically, optimizes and saves to disk
 - **File caching**: Each fetch transformed, gzipped, and saved as `<timestamp>.json.gz`
 - **Gzip serving**: Files served with `Content-Encoding: gzip` for automatic browser decompression
@@ -292,4 +293,26 @@ JSON Schema files are available in `schemas/`:
 | Click resource | Open detail modal |
 | Arrow keys (in modal) | Navigate resources |
 | Keys 1-9 | Change color mode |
+| L | Toggle legend panel |
+| T | Toggle time travel panel |
 | ? | Toggle help panel |
+
+## Time Travel Feature
+
+View and playback historical cluster states. Located at top-center of the screen.
+
+### Controls
+
+- **Title bar**: Click to expand/collapse panel (or press 'T')
+- **Slider**: Scrub through available timestamps
+- **|< / >|**: Step to previous/next snapshot
+- **Play button**: Start/stop playback animation
+- **Speed selector**: 100x, 1000x, or 10000x realtime
+- **LIVE button**: Return to real-time mode (resumes auto-refresh)
+
+### State Management
+
+- When in time travel mode, auto-refresh is paused
+- State persists in URL hash (`tt=timestamp`, `ts=speed`, `te=expanded`)
+- Preloads ±3 adjacent snapshots for smooth playback
+- Playback speed relative to 120s fetch interval (e.g., 1000x = 0.12 seconds per snapshot)

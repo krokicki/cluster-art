@@ -125,6 +125,54 @@ def get_latest_cached_file() -> Optional[Path]:
     return max(all_files, key=get_timestamp)
 
 
+def get_all_cache_timestamps() -> list[int]:
+    """Get all available cache timestamps, sorted ascending"""
+    if not settings.cache_folder.exists():
+        return []
+
+    gz_files = list(settings.cache_folder.glob("*.json.gz"))
+    json_files = list(settings.cache_folder.glob("*.json"))
+    all_files = gz_files + json_files
+
+    def get_timestamp(p: Path) -> int:
+        stem = p.stem
+        if stem.endswith('.json'):
+            stem = stem[:-5]
+        try:
+            return int(stem)
+        except ValueError:
+            return 0
+
+    timestamps = [get_timestamp(f) for f in all_files if get_timestamp(f) > 0]
+    return sorted(timestamps)
+
+
+def get_cache_file_by_timestamp(timestamp: int) -> Optional[Path]:
+    """Get cache file for a specific timestamp, or closest available"""
+    timestamps = get_all_cache_timestamps()
+    if not timestamps:
+        return None
+
+    # Find exact match first
+    if timestamp in timestamps:
+        target_ts = timestamp
+    else:
+        # Find closest timestamp
+        closest = min(timestamps, key=lambda t: abs(t - timestamp))
+        target_ts = closest
+
+    # Try gzipped first, then plain JSON
+    gz_path = settings.cache_folder / f"{target_ts}.json.gz"
+    if gz_path.exists():
+        return gz_path
+
+    json_path = settings.cache_folder / f"{target_ts}.json"
+    if json_path.exists():
+        return json_path
+
+    return None
+
+
 def load_cached_data() -> Optional[Dict[str, Any]]:
     """Load data from the latest cached file (gzip or plain)"""
     latest_file = get_latest_cached_file()
@@ -308,6 +356,35 @@ async def get_cluster_status():
         )
 
 
+@app.get("/api/cluster-status/{timestamp}")
+async def get_cluster_status_at(timestamp: int):
+    """Serve cluster status at or nearest to the given timestamp"""
+    cache_file = get_cache_file_by_timestamp(timestamp)
+
+    if cache_file is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "No cached data available", "requested_timestamp": timestamp}
+        )
+
+    # Serve gzipped file directly with Content-Encoding header
+    if cache_file.suffix == '.gz':
+        with open(cache_file, 'rb') as f:
+            content = f.read()
+        return Response(
+            content=content,
+            media_type='application/json',
+            headers={'Content-Encoding': 'gzip'}
+        )
+    else:
+        with open(cache_file, 'r') as f:
+            content = f.read()
+        return Response(
+            content=content,
+            media_type='application/json'
+        )
+
+
 @app.get("/api/health")
 async def health():
     """Health check endpoint"""
@@ -324,37 +401,16 @@ async def health():
 @app.get("/api/timepoints")
 async def get_timepoints():
     """Return metadata about available cached timepoints"""
-    if not settings.cache_folder.exists():
-        return {"first": None, "last": None, "count": 0}
-
-    # Get all cached files
-    gz_files = list(settings.cache_folder.glob("*.json.gz"))
-    json_files = list(settings.cache_folder.glob("*.json"))
-    all_files = gz_files + json_files
-
-    if not all_files:
-        return {"first": None, "last": None, "count": 0}
-
-    # Extract timestamps from filenames
-    def get_timestamp(p: Path) -> int:
-        stem = p.stem
-        if stem.endswith('.json'):  # Handle .json.gz case
-            stem = stem[:-5]
-        try:
-            return int(stem)
-        except ValueError:
-            return 0
-
-    timestamps = [get_timestamp(f) for f in all_files]
-    timestamps = [t for t in timestamps if t > 0]  # Filter invalid
+    timestamps = get_all_cache_timestamps()
 
     if not timestamps:
-        return {"first": None, "last": None, "count": 0}
+        return {"first": None, "last": None, "count": 0, "timestamps": []}
 
     return {
-        "first": min(timestamps),
-        "last": max(timestamps),
-        "count": len(timestamps)
+        "first": timestamps[0],
+        "last": timestamps[-1],
+        "count": len(timestamps),
+        "timestamps": timestamps
     }
 
 
