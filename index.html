@@ -92,8 +92,8 @@
 
         #zoom-controls {
             position: fixed;
-            top: 20px;
-            left: 20px;
+            bottom: 20px;
+            right: 20px;
             display: flex;
             gap: 8px;
             z-index: 1000;
@@ -188,6 +188,21 @@
             text-shadow: 0 0 5px rgba(255, 0, 255, 0.7);
         }
 
+        #help {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            max-width: 500px;
+            background: #1a1a2e;
+            border: 4px solid #00ff00;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            line-height: 2;
+            color: #00ff00;
+            z-index: 999;
+        }
+
         #legend {
             position: fixed;
             top: 20px;
@@ -201,6 +216,82 @@
             line-height: 2;
             color: #00ff00;
             z-index: 999;
+        }
+
+        #help-title {
+            color: #ffff00;
+            text-align: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+
+        #help-title:hover {
+            background: #00ff00;
+            color: #1a1a2e;
+        }
+
+        #help-title::after {
+            content: ' [?]';
+            color: #00ff00;
+            font-size: 8px;
+        }
+
+        #help-title:hover::after {
+            color: #1a1a2e;
+        }
+
+        #help-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        #help.expanded #help-content {
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+
+        #help-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #help-content::-webkit-scrollbar-track {
+            background: #0f0f1e;
+        }
+
+        #help-content::-webkit-scrollbar-thumb {
+            background: #00ff00;
+        }
+
+        .help-section {
+            padding: 16px;
+            border-top: 2px solid #00ff00;
+        }
+
+        .help-section-title {
+            color: #00ffff;
+            margin-bottom: 8px;
+            font-size: 9px;
+        }
+
+        .help-item {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 6px;
+            font-size: 8px;
+            line-height: 1.6;
+        }
+
+        .help-key {
+            color: #ffff00;
+            min-width: 60px;
+            flex-shrink: 0;
+        }
+
+        .help-desc {
+            color: #00ff00;
         }
 
         #legend-title {
@@ -491,6 +582,104 @@
         <div class="resize-handle bottom-right" data-corner="bottom-right"></div>
     </div>
     <div id="tooltip" class="bottom"></div>
+
+    <div id="help">
+        <div id="help-title">HELP</div>
+        <div id="help-content">
+            <div class="help-section">
+                <div class="help-section-title">NAVIGATION</div>
+                <div class="help-item">
+                    <div class="help-key">CLICK+DRAG</div>
+                    <div class="help-desc">Move canvas</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">CLICK</div>
+                    <div class="help-desc">View resource details</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">ARROWS</div>
+                    <div class="help-desc">Navigate in modal</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">ESC</div>
+                    <div class="help-desc">Close modal</div>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">ZOOM</div>
+                <div class="help-item">
+                    <div class="help-key">+ / -</div>
+                    <div class="help-desc">Zoom in/out</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">CLICK %</div>
+                    <div class="help-desc">Reset to 100%</div>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">RESIZE</div>
+                <div class="help-item">
+                    <div class="help-key">CORNERS</div>
+                    <div class="help-desc">Drag to resize</div>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">COLOR MODES</div>
+                <div class="help-item">
+                    <div class="help-key">1</div>
+                    <div class="help-desc">By User</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">2</div>
+                    <div class="help-desc">By Hostname</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">3</div>
+                    <div class="help-desc">By Row</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">4</div>
+                    <div class="help-desc">By Hardware</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">5</div>
+                    <div class="help-desc">By GPU Type</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">6</div>
+                    <div class="help-desc">By Utilization</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">7</div>
+                    <div class="help-desc">By Slot Status</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">8</div>
+                    <div class="help-desc">By Host Status</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">9</div>
+                    <div class="help-desc">By Free Memory</div>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">PANELS</div>
+                <div class="help-item">
+                    <div class="help-key">L</div>
+                    <div class="help-desc">Toggle legend</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">?</div>
+                    <div class="help-desc">Toggle this help</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="zoom-controls">
         <button class="zoom-button" id="zoom-out" title="Zoom Out (-)">-</button>
         <div id="zoom-level">100%</div>
@@ -559,10 +748,11 @@
                 x: Math.round(canvasX),
                 y: Math.round(canvasY),
                 w: Math.round(canvasWidth),
-                h: Math.round(canvasHeight),
+                ht: Math.round(canvasHeight),
                 z: zoomLevel.toFixed(2),
                 m: currentColorMode,
-                l: legendExpanded ? 1 : 0
+                l: legendExpanded ? 1 : 0,
+                h: helpExpanded ? 1 : 0
             };
 
             const hash = Object.entries(state)
@@ -582,10 +772,11 @@
             if (params.has('x')) canvasX = parseFloat(params.get('x'));
             if (params.has('y')) canvasY = parseFloat(params.get('y'));
             if (params.has('w')) canvasWidth = parseFloat(params.get('w'));
-            if (params.has('h')) canvasHeight = parseFloat(params.get('h'));
+            if (params.has('ht')) canvasHeight = parseFloat(params.get('ht'));
             if (params.has('z')) zoomLevel = parseFloat(params.get('z'));
             if (params.has('m')) currentColorMode = parseInt(params.get('m'));
             if (params.has('l')) legendExpanded = params.get('l') === '1';
+            if (params.has('h')) helpExpanded = params.get('h') === '1';
 
             return true;
         }
@@ -1297,9 +1488,14 @@
                 reflowLayout();
                 populateLegend();
 
-                // Apply legend state from URL
-                if (hasURLState && legendExpanded) {
-                    legend.classList.add('expanded');
+                // Apply panel states from URL
+                if (hasURLState) {
+                    if (legendExpanded) {
+                        legend.classList.add('expanded');
+                    }
+                    if (helpExpanded) {
+                        help.classList.add('expanded');
+                    }
                 }
 
                 // Save initial state to URL
@@ -1552,6 +1748,23 @@
             }
         }
 
+        // Help panel toggle
+        const help = document.getElementById('help');
+        const helpTitle = document.getElementById('help-title');
+        let helpExpanded = false;
+
+        function toggleHelp() {
+            helpExpanded = !helpExpanded;
+            if (helpExpanded) {
+                help.classList.add('expanded');
+            } else {
+                help.classList.remove('expanded');
+            }
+            saveStateToURL();
+        }
+
+        helpTitle.addEventListener('click', toggleHelp);
+
         // Legend toggle
         const legend = document.getElementById('legend');
         const legendTitle = document.getElementById('legend-title');
@@ -1626,6 +1839,11 @@
             // L to toggle legend
             if (e.key === 'l' || e.key === 'L') {
                 toggleLegend();
+            }
+
+            // ? to toggle help
+            if (e.key === '?') {
+                toggleHelp();
             }
 
             // Number keys 1-9 to switch color modes
