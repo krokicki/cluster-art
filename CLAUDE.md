@@ -233,6 +233,46 @@ interface GpuAttribution {
 }
 ```
 
+### Schema Optimization Summary
+
+JSON Schema files are available in `schemas/`:
+- `original.schema.json` - Upstream API format
+- `optimized.schema.json` - Cached/served format
+
+#### Fields Removed (redundant/computable)
+
+| Field | Reason |
+|-------|--------|
+| `hosts` | Computable: `total` = hostDetails.length |
+| `cpus` | Computable: sum of hostDetails[].cpus |
+| `gpus` | Computable: sum of hostDetails[].gpus |
+| `hardwareGroups` | Embedded as `hardwareGroup` in each hostDetail |
+| `raw.hosts` | Exact duplicate of hostDetails load metrics |
+| `raw.metadata` | Only contains derivable counts |
+| `raw.jobs.gpu_jobs` | Redundant with `gpu_attribution` |
+
+#### Fields Modified
+
+| Field | Original | Optimized |
+|-------|----------|-----------|
+| `cpuSlots` | `string[]` with empty strings for idle | `{[index]: string}` sparse object |
+| `gpuSlots` | `string[]` with empty strings for idle | `{[index]: string}` sparse object |
+
+#### Fields Added
+
+| Field | Location | Description |
+|-------|----------|-------------|
+| `hardwareGroup` | `hostDetails[]` | Hardware group name (was top-level lookup) |
+
+#### Size Impact
+
+| Stage | Size |
+|-------|------|
+| Original JSON | ~600 KB |
+| Schema optimization | ~510 KB |
+| + gzip compression | ~23 KB |
+| **Total reduction** | **~96%** |
+
 ## Styling
 
 - **Theme**: Retro CRT monitor (green on black with glow)

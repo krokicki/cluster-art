@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cluster-art/schemas/original.schema.json",
+  "title": "ClusterStatus (Original)",
+  "description": "Original cluster status data from upstream API before optimization",
+  "type": "object",
+  "required": ["hostDetails", "fetchedAt"],
+  "properties": {
+    "hosts": {
+      "type": "object",
+      "description": "Summary host statistics",
+      "properties": {
+        "total": { "type": "integer" },
+        "active": { "type": "integer" }
+      },
+      "required": ["total", "active"]
+    },
+    "cpus": {
+      "type": "object",
+      "description": "Summary CPU statistics",
+      "properties": {
+        "total": { "type": "integer" },
+        "used": { "type": "integer" },
+        "idle": { "type": "integer" }
+      },
+      "required": ["total", "used", "idle"]
+    },
+    "gpus": {
+      "type": "object",
+      "description": "Summary GPU statistics",
+      "properties": {
+        "total": { "type": "integer" },
+        "used": { "type": "integer" },
+        "idle": { "type": "integer" }
+      },
+      "required": ["total", "used", "idle"]
+    },
+    "hostDetails": {
+      "type": "array",
+      "description": "Detailed information for each host",
+      "items": { "$ref": "#/$defs/HostDetail" }
+    },
+    "hardwareGroups": {
+      "type": "object",
+      "description": "Mapping of hardware group names to hostnames",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "activeUsers": {
+      "type": "integer",
+      "description": "Number of active users"
+    },
+    "userJobStats": {
+      "type": "object",
+      "description": "Job statistics per user",
+      "additionalProperties": { "$ref": "#/$defs/UserJobStats" }
+    },
+    "motd": {
+      "type": "string",
+      "description": "Message of the day"
+    },
+    "fetchedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when data was fetched"
+    },
+    "raw": {
+      "type": "object",
+      "description": "Raw data from LSF",
+      "properties": {
+        "jobs": {
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/Job" }
+            },
+            "gpu_jobs": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/GpuJob" }
+            }
+          }
+        },
+        "hosts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RawHost" }
+        },
+        "metadata": { "$ref": "#/$defs/Metadata" },
+        "gpu_attribution": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/GpuAttribution" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "HostDetail": {
+      "type": "object",
+      "description": "Detailed information for a single host",
+      "required": ["hostname", "status", "cpus", "gpus"],
+      "properties": {
+        "hostname": {
+          "type": "string",
+          "description": "Host identifier, e.g., 'h04u08'"
+        },
+        "status": {
+          "type": "string",
+          "description": "Host status, e.g., 'closed_Full', 'ok'"
+        },
+        "cpus": {
+          "type": "object",
+          "properties": {
+            "total": { "type": "integer" },
+            "used": { "type": "integer" },
+            "idle": { "type": "integer" }
+          },
+          "required": ["total", "used", "idle"]
+        },
+        "gpus": {
+          "type": "object",
+          "properties": {
+            "total": { "type": "integer" },
+            "used": { "type": "integer" },
+            "idle": { "type": "integer" }
+          },
+          "required": ["total", "used", "idle"]
+        },
+        "utilization": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "CPU utilization percentage"
+        },
+        "users": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Unique users on this host"
+        },
+        "gpu_type": {
+          "type": "string",
+          "description": "GPU type, e.g., 'NVIDIAH200', 'TeslaT4', 'NVIDIAL4'"
+        },
+        "cpuSlots": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Array of usernames for each CPU slot (empty string for idle)"
+        },
+        "gpuSlots": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Array of usernames for each GPU slot (empty string for idle)"
+        },
+        "load": { "$ref": "#/$defs/LoadMetrics" }
+      }
+    },
+    "LoadMetrics": {
+      "type": "object",
+      "description": "System load metrics for a host",
+      "properties": {
+        "r15s": {
+          "type": "number",
+          "description": "Load average over 15 seconds"
+        },
+        "r1m": {
+          "type": "number",
+          "description": "Load average over 1 minute"
+        },
+        "r15m": {
+          "type": "number",
+          "description": "Load average over 15 minutes"
+        },
+        "ut": {
+          "type": "number",
+          "description": "CPU utilization percentage"
+        },
+        "mem": {
+          "type": "number",
+          "description": "Memory usage in MB"
+        },
+        "io": {
+          "type": "number",
+          "description": "Disk I/O in KB/s"
+        },
+        "pg": {
+          "type": "number",
+          "description": "Paging activity"
+        },
+        "tmp": {
+          "type": "number",
+          "description": "Temp space in MB"
+        },
+        "swp": {
+          "type": "number",
+          "description": "Swap usage"
+        },
+        "load_status": {
+          "type": "string",
+          "description": "Load status, e.g., 'ok'"
+        }
+      }
+    },
+    "UserJobStats": {
+      "type": "object",
+      "description": "Job statistics for a user",
+      "properties": {
+        "run": { "type": "integer" },
+        "pending": { "type": "integer" },
+        "suspended": { "type": "integer" },
+        "slots": { "type": "integer" },
+        "gpus": { "type": "integer" }
+      }
+    },
+    "Job": {
+      "type": "object",
+      "description": "Job information",
+      "properties": {
+        "job_id": { "type": "string" },
+        "job_name": { "type": "string" },
+        "user": { "type": "string" },
+        "status": {
+          "type": "string",
+          "description": "Job status: 'RUN', 'PEND', etc."
+        },
+        "exec_host": { "type": "string" },
+        "resource_requirements": { "type": "string" },
+        "start_time": { "type": "string" },
+        "submit_time": { "type": "string" },
+        "run_time_seconds": { "type": "number" }
+      }
+    },
+    "GpuJob": {
+      "type": "object",
+      "description": "GPU job information",
+      "properties": {
+        "job_id": { "type": "string" },
+        "job_name": { "type": "string" },
+        "user": { "type": "string" },
+        "status": { "type": "string" },
+        "host": { "type": "string" },
+        "num_gpus": { "type": "integer" },
+        "gpu_ids": {
+          "type": "array",
+          "items": { "type": "integer" }
+        },
+        "assignment_method": { "type": "string" }
+      }
+    },
+    "RawHost": {
+      "type": "object",
+      "description": "Raw host data from LSF",
+      "properties": {
+        "hostname": { "type": "string" },
+        "max_slots": { "type": "integer" },
+        "status": { "type": "string" },
+        "gpus": { "type": "array" },
+        "load_status": { "type": "string" },
+        "r15s": { "type": "number" },
+        "r1m": { "type": "number" },
+        "r15m": { "type": "number" },
+        "ut": { "type": "number" },
+        "pg": { "type": "number" },
+        "io": { "type": "number" },
+        "tmp": { "type": "number" },
+        "swp": { "type": "number" },
+        "mem": { "type": "number" }
+      }
+    },
+    "Metadata": {
+      "type": "object",
+      "description": "Metadata about the raw data",
+      "properties": {
+        "generated_at": { "type": "string" },
+        "total_jobs": { "type": "integer" },
+        "running_jobs": { "type": "integer" },
+        "pending_jobs": { "type": "integer" },
+        "suspended_jobs": { "type": "integer" },
+        "total_hosts": { "type": "integer" },
+        "gpu_jobs": { "type": "integer" }
+      }
+    },
+    "GpuAttribution": {
+      "type": "object",
+      "description": "GPU attribution mapping GPU slots to jobs",
+      "properties": {
+        "hostname": { "type": "string" },
+        "gpu_id": { "type": "integer" },
+        "job_id": { "type": "string" },
+        "job_name": { "type": "string" },
+        "user": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    }
+  }
+}
