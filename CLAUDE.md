@@ -12,9 +12,12 @@ pixi run serve   # Starts server at http://localhost:8000
 
 ```
 cluster-art/
-├── app.py         # FastAPI backend (143 lines)
-├── index.html     # Frontend SPA with all CSS/JS (2165 lines)
+├── app.py         # FastAPI backend
+├── index.html     # Frontend SPA with all CSS/JS
 ├── pixi.toml      # Project config and dependencies
+├── .env           # Local config overrides (optional, gitignored)
+├── cache/         # Cached JSON files (gitignored)
+│   └── <unix_timestamp>.json
 └── CLAUDE.md      # This file
 ```
 
@@ -34,17 +37,35 @@ Browser (index.html)          FastAPI (app.py)           Upstream
 - **Framework**: FastAPI with Uvicorn
 - **Endpoints**:
   - `GET /` - Serves index.html
-  - `GET /api/cluster-status` - Returns cached cluster data
-  - `GET /api/health` - Health check
-- **Background task**: Fetches upstream data every 2 minutes, caches in memory
+  - `GET /api/cluster-status` - Returns latest cached file (fetches if none exists)
+  - `GET /api/health` - Health check with cache info
+- **Background task**: Fetches upstream data periodically, saves to disk
+- **File caching**: Each fetch saved as `<timestamp>.json` in cache folder
 - **CORS**: Enabled for all origins
 
-### Key Backend Constants
+### Configuration (Pydantic Settings)
 
-```python
-UPSTREAM_URL = "https://cluster-status.int.janelia.org/api/cluster-status"
-FETCH_INTERVAL = 120  # seconds
+Settings loaded from environment variables with `CLUSTER_` prefix, or from `.env` file:
+
+| Setting | Env Variable | Default |
+|---------|--------------|---------|
+| `upstream_url` | `CLUSTER_UPSTREAM_URL` | `https://cluster-status.int.janelia.org/api/cluster-status` |
+| `fetch_interval` | `CLUSTER_FETCH_INTERVAL` | `120` (seconds) |
+| `cache_folder` | `CLUSTER_CACHE_FOLDER` | `cache` |
+
+Example `.env` file:
+```bash
+CLUSTER_UPSTREAM_URL=https://my-cluster.example.com/api/status
+CLUSTER_FETCH_INTERVAL=60
+CLUSTER_CACHE_FOLDER=/var/cache/cluster-viz
 ```
+
+### Cache Files
+
+- Stored in `cache/` folder (configurable)
+- Filename format: `<unix_timestamp>.json` (from `fetchedAt` field)
+- Latest file served on API request
+- On startup, uses existing cache if available
 
 ## Frontend (index.html)
 

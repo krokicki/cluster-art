@@ -1,80 +1,163 @@
 #!/usr/bin/env python3
 """
 Simple backend server using FastAPI that:
-1. Periodically fetches cluster status from upstream API (every 2 minutes)
-2. Caches the response locally
-3. Serves the cached data with CORS support
+1. Periodically fetches cluster status from upstream API
+2. Saves each fetch to disk with timestamp filename
+3. Serves the latest cached file with CORS support
 4. Serves the index.html frontend
 """
 
 import asyncio
+import json
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict, Any
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic_settings import BaseSettings
 import httpx
 
-# Configuration
-UPSTREAM_URL = "https://cluster-status.int.janelia.org/api/cluster-status"
-FETCH_INTERVAL = 120  # 2 minutes in seconds
 
-# Global cache
-cached_data: Optional[Dict[str, Any]] = None
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables"""
+    upstream_url: str = "https://cluster-status.int.janelia.org/api/cluster-status"
+    fetch_interval: int = 120  # seconds
+    cache_folder: Path = Path("cache")
+
+    model_config = {
+        "env_prefix": "CLUSTER_",
+        "env_file": ".env",
+    }
+
+
+settings = Settings()
+
+# Global state
 last_fetch_time: Optional[datetime] = None
 fetch_error: Optional[str] = None
 
 
-async def fetch_cluster_status():
-    """Periodically fetch cluster status from upstream API and cache it"""
-    global cached_data, last_fetch_time, fetch_error
+def ensure_cache_folder():
+    """Ensure the cache folder exists"""
+    settings.cache_folder.mkdir(parents=True, exist_ok=True)
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        while True:
-            try:
-                print(f"[{datetime.now().isoformat()}] Fetching cluster status...")
-                response = await client.get(UPSTREAM_URL)
-                response.raise_for_status()
 
-                cached_data = response.json()
-                last_fetch_time = datetime.now()
-                fetch_error = None
+def get_latest_cached_file() -> Optional[Path]:
+    """Get the most recent cached JSON file"""
+    if not settings.cache_folder.exists():
+        return None
 
-                print(f"[{datetime.now().isoformat()}] Successfully fetched and cached cluster status")
+    json_files = list(settings.cache_folder.glob("*.json"))
+    if not json_files:
+        return None
 
-            except Exception as e:
-                fetch_error = str(e)
-                print(f"[{datetime.now().isoformat()}] Error fetching cluster status: {e}")
+    # Sort by filename (timestamp) descending
+    return max(json_files, key=lambda p: p.stem)
 
-            # Wait for next fetch interval
-            await asyncio.sleep(FETCH_INTERVAL)
+
+def load_cached_data() -> Optional[Dict[str, Any]]:
+    """Load data from the latest cached file"""
+    latest_file = get_latest_cached_file()
+    if latest_file is None:
+        return None
+
+    try:
+        with open(latest_file, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading cached file {latest_file}: {e}")
+        return None
+
+
+def save_to_cache(data: Dict[str, Any]) -> Path:
+    """Save data to a cache file named with unix timestamp from fetchedAt"""
+    ensure_cache_folder()
+
+    # Parse fetchedAt ISO timestamp and convert to unix timestamp
+    fetched_at = data.get("fetchedAt", "")
+    try:
+        dt = datetime.fromisoformat(fetched_at.replace("Z", "+00:00"))
+        timestamp = int(dt.timestamp())
+    except (ValueError, AttributeError):
+        # Fallback to current time if fetchedAt is missing or invalid
+        timestamp = int(datetime.now().timestamp())
+
+    filepath = settings.cache_folder / f"{timestamp}.json"
+
+    with open(filepath, "w") as f:
+        json.dump(data, f)
+
+    return filepath
+
+
+async def fetch_and_cache() -> Optional[Dict[str, Any]]:
+    """Fetch cluster status from upstream API and save to cache"""
+    global last_fetch_time, fetch_error
+
+    try:
+        print(f"[{datetime.now().isoformat()}] Fetching cluster status from {settings.upstream_url}...")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(settings.upstream_url)
+            response.raise_for_status()
+
+            data = response.json()
+            filepath = save_to_cache(data)
+            last_fetch_time = datetime.now()
+            fetch_error = None
+
+            print(f"[{datetime.now().isoformat()}] Saved to {filepath}")
+            return data
+
+    except Exception as e:
+        fetch_error = str(e)
+        print(f"[{datetime.now().isoformat()}] Error fetching cluster status: {e}")
+        return None
+
+
+async def periodic_fetch():
+    """Periodically fetch cluster status from upstream API"""
+    while True:
+        await fetch_and_cache()
+        await asyncio.sleep(settings.fetch_interval)
 
 
 async def initial_fetch():
-    """Perform initial fetch on startup"""
-    global cached_data, last_fetch_time, fetch_error
+    """Perform initial fetch on startup if no cached data exists"""
+    global last_fetch_time
 
-    try:
-        print("Performing initial fetch...")
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(UPSTREAM_URL)
-            response.raise_for_status()
-            cached_data = response.json()
-            last_fetch_time = datetime.now()
-            print(f"[{datetime.now().isoformat()}] Initial fetch successful")
-    except Exception as e:
-        fetch_error = str(e)
-        print(f"[{datetime.now().isoformat()}] Initial fetch failed: {e}")
+    # Check if we have cached data already
+    cached = load_cached_data()
+    if cached is not None:
+        latest_file = get_latest_cached_file()
+        if latest_file:
+            # Parse unix timestamp from filename
+            try:
+                unix_ts = int(latest_file.stem)
+                last_fetch_time = datetime.fromtimestamp(unix_ts)
+                print(f"[{datetime.now().isoformat()}] Using cached file: {latest_file}")
+                return
+            except ValueError:
+                pass
+
+    # No valid cache, fetch fresh data
+    print("No cached data found, performing initial fetch...")
+    await fetch_and_cache()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle manager for startup and shutdown events"""
+    print(f"Configuration:")
+    print(f"  Upstream URL: {settings.upstream_url}")
+    print(f"  Fetch interval: {settings.fetch_interval}s")
+    print(f"  Cache folder: {settings.cache_folder.absolute()}")
+
     # Startup: perform initial fetch and start background task
     await initial_fetch()
-    task = asyncio.create_task(fetch_cluster_status())
+    task = asyncio.create_task(periodic_fetch())
 
     yield
 
@@ -97,7 +180,7 @@ app = FastAPI(
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -112,27 +195,35 @@ async def index():
 
 @app.get("/api/cluster-status")
 async def get_cluster_status():
-    """Serve the cached cluster status with CORS support"""
-    if cached_data is None:
+    """Serve the latest cached cluster status"""
+    data = load_cached_data()
+
+    if data is None:
+        # No cache exists, try to fetch now
+        data = await fetch_and_cache()
+
+    if data is None:
         raise HTTPException(
             status_code=503,
             detail={
-                "error": "Data not yet available",
+                "error": "Data not available",
                 "last_error": fetch_error,
-                "message": "Backend is still fetching initial data. Please try again in a moment."
+                "message": "Could not fetch or load cluster data. Please try again."
             }
         )
 
-    return JSONResponse(content=cached_data)
+    return JSONResponse(content=data)
 
 
 @app.get("/api/health")
 async def health():
     """Health check endpoint"""
+    latest_file = get_latest_cached_file()
     return {
         "status": "ok",
         "last_fetch": last_fetch_time.isoformat() if last_fetch_time else None,
-        "has_data": cached_data is not None,
+        "latest_cache_file": str(latest_file) if latest_file else None,
+        "cache_folder": str(settings.cache_folder.absolute()),
         "last_error": fetch_error
     }
 
