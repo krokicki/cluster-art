@@ -348,6 +348,15 @@
             opacity: 1;
         }
 
+        #current-mode {
+            padding: 12px 16px;
+            border-top: 2px solid #00ff00;
+            text-align: center;
+            color: #00ffff;
+            font-size: 9px;
+            background: rgba(0, 255, 255, 0.1);
+        }
+
         #legend-items {
             display: flex;
             flex-direction: column;
@@ -707,6 +716,7 @@
     <div id="legend">
         <div id="legend-title">LEGEND</div>
         <div id="legend-content">
+            <div id="current-mode"></div>
             <div id="legend-items"></div>
         </div>
     </div>
@@ -806,15 +816,15 @@
 
         // Color mode management
         const MODE_DESCRIPTIONS = [
-            'USER',
-            'HOSTNAME',
-            'ROW',
-            'HARDWARE',
-            'GPU TYPE',
-            'UTILIZATION',
-            'SLOT STATUS',
-            'HOST STATUS',
-            'FREE MEMORY'
+            'By User',
+            'By Hostname',
+            'By Row',
+            'By Hardware',
+            'By GPU Type',
+            'By Utilization',
+            'By Slot Status',
+            'By Host Status',
+            'By Free Memory'
         ];
 
         let currentColorMode = 1;
@@ -1505,6 +1515,7 @@
 
                 // Apply layout with proper reflow (accounts for zoom level)
                 reflowLayout();
+                updateCurrentModeDisplay();
                 populateLegend();
 
                 // Apply panel states from URL
@@ -1545,6 +1556,7 @@
                 draw();
 
                 // Update legend with new data
+                updateCurrentModeDisplay();
                 populateLegend();
 
                 console.log(`[${new Date().toISOString()}] Cluster data refreshed successfully`);
@@ -1757,10 +1769,19 @@
             draw(); // Redraw to remove hover border
         }
 
+        // Update current mode display
+        function updateCurrentModeDisplay() {
+            const currentModeDisplay = document.getElementById('current-mode');
+            if (currentModeDisplay) {
+                currentModeDisplay.textContent = `Color ${MODE_DESCRIPTIONS[currentColorMode - 1]}`;
+            }
+        }
+
         // Mode switching
         function switchColorMode(mode) {
             if (mode >= 1 && mode <= 9 && colorStrategies.length > 0) {
                 currentColorMode = mode;
+                updateCurrentModeDisplay();
                 populateLegend();
                 draw();
                 saveStateToURL();
