@@ -726,6 +726,7 @@
         <div id="modal">
             <div id="modal-header">
                 <div id="modal-title">RESOURCE DETAILS</div>
+                <div id="modal-status"></div>
             </div>
             <div id="modal-content"></div>
         </div>
@@ -1920,6 +1921,8 @@
         // Modal handling
         const modalOverlay = document.getElementById('modal-overlay');
         const modalContent = document.getElementById('modal-content');
+        const modalTitle = document.getElementById('modal-title');
+        const modalStatus = document.getElementById('modal-status');
         const modal = document.getElementById('modal');
         const modalNavLeft = document.getElementById('modal-nav-left');
         const modalNavRight = document.getElementById('modal-nav-right');
@@ -1948,7 +1951,11 @@
                 ? '<span class="status-badge idle">IDLE</span>'
                 : '<span class="status-badge in-use">IN-USE</span>';
 
-            // Column 1: Basic info and host status
+            // Update header with hostname and slot#, status badge in upper right
+            modalTitle.textContent = `${resource.hostname} - ${resource.type.toUpperCase()} #${resource.index}`;
+            modalStatus.innerHTML = statusBadge;
+
+            // Column 1: Basic info
             let column1 = `
                 <div>
                     <div class="modal-section">
@@ -1958,24 +1965,12 @@
                             <div class="modal-value">${resource.type.toUpperCase()}</div>
                         </div>
                         <div class="modal-info-row">
-                            <div class="modal-label">HOSTNAME:</div>
-                            <div class="modal-value">${resource.hostname}</div>
-                        </div>
-                        <div class="modal-info-row">
-                            <div class="modal-label">ROW:</div>
-                            <div class="modal-value">${resource.row}</div>
-                        </div>
-                        <div class="modal-info-row">
                             <div class="modal-label">HARDWARE:</div>
                             <div class="modal-value">${resource.hardwareGroup}</div>
                         </div>
                         <div class="modal-info-row">
-                            <div class="modal-label">SLOT:</div>
-                            <div class="modal-value">#${resource.index}</div>
-                        </div>
-                        <div class="modal-info-row">
-                            <div class="modal-label">STATUS:</div>
-                            <div class="modal-value">${statusBadge}</div>
+                            <div class="modal-label">HOST STATUS:</div>
+                            <div class="modal-value">${resource.status}</div>
                         </div>
                         ${resource.user ? `
                         <div class="modal-info-row">
@@ -1990,18 +1985,6 @@
                         </div>
                         ` : ''}
                     </div>
-
-                    <div class="modal-section">
-                        <div class="modal-section-title">HOST STATUS</div>
-                        <div class="modal-info-row">
-                            <div class="modal-label">HOST STATUS:</div>
-                            <div class="modal-value">${resource.status}</div>
-                        </div>
-                        <div class="modal-info-row">
-                            <div class="modal-label">UTILIZATION:</div>
-                            <div class="modal-value">${resource.utilization}%</div>
-                        </div>
-                    </div>
                 </div>
             `;
 
@@ -2015,6 +1998,10 @@
                 column2 += `
                     <div class="modal-section">
                         <div class="modal-section-title">USAGE</div>
+                        <div class="modal-info-row">
+                            <div class="modal-label">UTILIZATION:</div>
+                            <div class="modal-value">${resource.utilization}%</div>
+                        </div>
                         ${memoryGB ? `
                         <div class="modal-info-row">
                             <div class="modal-label">MEMORY AVAIL:</div>
