@@ -1494,10 +1494,16 @@
 
             // Set initial canvas size (if not loaded from URL)
             if (!hasURLState) {
-                canvasWidth = 1200;
-                canvasHeight = 800;
-                // Center the canvas on page
-                centerCanvas();
+                // Fit canvas to window: 95% width, below buttons with margin
+                const topMargin = 80;  // Space for help/legend buttons
+                const bottomMargin = 80;  // Space for zoom controls at bottom
+                const sideMargin = window.innerWidth * 0.025;  // 2.5% on each side = 95% width
+
+                canvasWidth = Math.floor(window.innerWidth * 0.95);
+                canvasHeight = Math.floor(window.innerHeight - topMargin - bottomMargin);
+                canvasX = sideMargin;
+                canvasY = topMargin;
+                updateCanvasPosition();
             } else {
                 // Apply loaded position and size
                 updateCanvasPosition();
