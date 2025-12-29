@@ -1,6 +1,10 @@
 # Cluster Visualization - JSON Schema
 
-## cluster-status.json Structure
+This is an artistic cluster visualization for HPC clusters. It prioritizes art over usefulness. The data comes from a JSON file that is reserved by the backend in order to add CORS headers. It has a vintage video game aesthetic, and is easy to use.
+
+The project is managed using Pixi, and all commands should be executed using Pixi. Running the server can be done by `pixi run serve`.
+
+## JSON Structure
 
 ```typescript
 interface ClusterStatus {
@@ -148,18 +152,6 @@ interface GpuAttribution {
   status: string;
 }
 ```
-
-## Known Hardware Groups
-
-- **CPU + T4**: 32 hosts with CPU and Tesla T4 GPU
-- **CPU + L4**: 32 hosts with CPU and L4 GPU
-- **CPU + 8GPU L4**: 29 hosts with CPU and 8x L4 GPUs
-- **8GPU L4**: 12 hosts with 8x L4 GPUs
-- **4GPU A100**: 19 hosts with 4x A100 GPUs
-- **8GPU H100**: 10 hosts with 8x H100 GPUs
-- **8GPU H200**: 8 hosts with 8x H200 GPUs
-- **GH200**: 1 host with GH200
-- **7GPU L4**: 1 host with 7x L4 GPUs
 
 ## Usage Notes
 
