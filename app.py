@@ -321,6 +321,43 @@ async def health():
     }
 
 
+@app.get("/api/timepoints")
+async def get_timepoints():
+    """Return metadata about available cached timepoints"""
+    if not settings.cache_folder.exists():
+        return {"first": None, "last": None, "count": 0}
+
+    # Get all cached files
+    gz_files = list(settings.cache_folder.glob("*.json.gz"))
+    json_files = list(settings.cache_folder.glob("*.json"))
+    all_files = gz_files + json_files
+
+    if not all_files:
+        return {"first": None, "last": None, "count": 0}
+
+    # Extract timestamps from filenames
+    def get_timestamp(p: Path) -> int:
+        stem = p.stem
+        if stem.endswith('.json'):  # Handle .json.gz case
+            stem = stem[:-5]
+        try:
+            return int(stem)
+        except ValueError:
+            return 0
+
+    timestamps = [get_timestamp(f) for f in all_files]
+    timestamps = [t for t in timestamps if t > 0]  # Filter invalid
+
+    if not timestamps:
+        return {"first": None, "last": None, "count": 0}
+
+    return {
+        "first": min(timestamps),
+        "last": max(timestamps),
+        "count": len(timestamps)
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     print("Starting FastAPI server on http://localhost:8000")

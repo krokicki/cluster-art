@@ -39,6 +39,7 @@ Browser (index.html)          FastAPI (app.py)           Upstream
   - `GET /` - Serves index.html
   - `GET /api/cluster-status` - Returns latest cached file (fetches if none exists)
   - `GET /api/health` - Health check with cache info
+  - `GET /api/timepoints` - Returns `{first, last, count}` for cached files (unix timestamps)
 - **Background task**: Fetches upstream data periodically, optimizes and saves to disk
 - **File caching**: Each fetch transformed, gzipped, and saved as `<timestamp>.json.gz`
 - **Gzip serving**: Files served with `Content-Encoding: gzip` for automatic browser decompression
