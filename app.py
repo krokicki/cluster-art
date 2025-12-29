@@ -8,6 +8,7 @@ Simple backend server using FastAPI that:
 """
 
 import asyncio
+import gzip
 import json
 from datetime import datetime
 from pathlib import Path
@@ -15,7 +16,7 @@ from typing import Optional, Dict, Any
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings
 import httpx
@@ -45,35 +46,105 @@ def ensure_cache_folder():
     settings.cache_folder.mkdir(parents=True, exist_ok=True)
 
 
+def transform_to_optimized(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Transform upstream data to optimized format.
+
+    Optimizations:
+    - Remove redundant data (raw.hosts, summaries, raw.metadata, raw.jobs.gpu_jobs)
+    - Convert slot arrays to sparse format
+    - Embed hardwareGroup directly in hostDetails
+    """
+    # Build hostname -> hardwareGroup mapping
+    hostname_to_group = {}
+    for group_name, hostnames in data.get('hardwareGroups', {}).items():
+        for hostname in hostnames:
+            hostname_to_group[hostname] = group_name
+
+    # Transform hostDetails
+    optimized_host_details = []
+    for host in data.get('hostDetails', []):
+        # Convert slot arrays to sparse format (only non-empty slots)
+        cpu_slots_sparse = {
+            str(i): user
+            for i, user in enumerate(host.get('cpuSlots', []))
+            if user
+        }
+        gpu_slots_sparse = {
+            str(i): user
+            for i, user in enumerate(host.get('gpuSlots', []))
+            if user
+        }
+
+        optimized_host = {
+            **host,
+            'cpuSlots': cpu_slots_sparse,
+            'gpuSlots': gpu_slots_sparse,
+            'hardwareGroup': hostname_to_group.get(host['hostname'], 'Unknown')
+        }
+        optimized_host_details.append(optimized_host)
+
+    # Build optimized structure (removed: hosts, cpus, gpus, hardwareGroups, raw.hosts, raw.metadata, raw.jobs.gpu_jobs)
+    return {
+        'hostDetails': optimized_host_details,
+        'activeUsers': data.get('activeUsers'),
+        'userJobStats': data.get('userJobStats'),
+        'motd': data.get('motd'),
+        'fetchedAt': data.get('fetchedAt'),
+        'raw': {
+            'jobs': {
+                'all': data.get('raw', {}).get('jobs', {}).get('all', [])
+            },
+            'gpu_attribution': data.get('raw', {}).get('gpu_attribution', [])
+        }
+    }
+
+
 def get_latest_cached_file() -> Optional[Path]:
-    """Get the most recent cached JSON file"""
+    """Get the most recent cached JSON file (gzipped or plain)"""
     if not settings.cache_folder.exists():
         return None
 
+    # Check for gzipped files first, then plain JSON for backwards compatibility
+    gz_files = list(settings.cache_folder.glob("*.json.gz"))
     json_files = list(settings.cache_folder.glob("*.json"))
-    if not json_files:
+
+    all_files = gz_files + json_files
+    if not all_files:
         return None
 
-    # Sort by filename (timestamp) descending
-    return max(json_files, key=lambda p: p.stem)
+    # Extract timestamp from filename (handles both .json and .json.gz)
+    def get_timestamp(p: Path) -> int:
+        stem = p.stem
+        if stem.endswith('.json'):  # Handle .json.gz case
+            stem = stem[:-5]
+        try:
+            return int(stem)
+        except ValueError:
+            return 0
+
+    return max(all_files, key=get_timestamp)
 
 
 def load_cached_data() -> Optional[Dict[str, Any]]:
-    """Load data from the latest cached file"""
+    """Load data from the latest cached file (gzip or plain)"""
     latest_file = get_latest_cached_file()
     if latest_file is None:
         return None
 
     try:
-        with open(latest_file, "r") as f:
-            return json.load(f)
+        if latest_file.suffix == '.gz':
+            with gzip.open(latest_file, 'rt', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            with open(latest_file, 'r') as f:
+                return json.load(f)
     except Exception as e:
         print(f"Error loading cached file {latest_file}: {e}")
         return None
 
 
 def save_to_cache(data: Dict[str, Any]) -> Path:
-    """Save data to a cache file named with unix timestamp from fetchedAt"""
+    """Save optimized, gzipped data to cache with unix timestamp filename"""
     ensure_cache_folder()
 
     # Parse fetchedAt ISO timestamp and convert to unix timestamp
@@ -85,10 +156,14 @@ def save_to_cache(data: Dict[str, Any]) -> Path:
         # Fallback to current time if fetchedAt is missing or invalid
         timestamp = int(datetime.now().timestamp())
 
-    filepath = settings.cache_folder / f"{timestamp}.json"
+    # Transform to optimized format
+    optimized_data = transform_to_optimized(data)
 
-    with open(filepath, "w") as f:
-        json.dump(data, f)
+    # Save as gzipped JSON
+    filepath = settings.cache_folder / f"{timestamp}.json.gz"
+
+    with gzip.open(filepath, 'wt', encoding='utf-8') as f:
+        json.dump(optimized_data, f)
 
     return filepath
 
@@ -195,14 +270,15 @@ async def index():
 
 @app.get("/api/cluster-status")
 async def get_cluster_status():
-    """Serve the latest cached cluster status"""
-    data = load_cached_data()
+    """Serve the latest cached cluster status with gzip compression"""
+    latest_file = get_latest_cached_file()
 
-    if data is None:
+    if latest_file is None:
         # No cache exists, try to fetch now
-        data = await fetch_and_cache()
+        await fetch_and_cache()
+        latest_file = get_latest_cached_file()
 
-    if data is None:
+    if latest_file is None:
         raise HTTPException(
             status_code=503,
             detail={
@@ -212,7 +288,24 @@ async def get_cluster_status():
             }
         )
 
-    return JSONResponse(content=data)
+    # Serve gzipped file directly with Content-Encoding header
+    if latest_file.suffix == '.gz':
+        with open(latest_file, 'rb') as f:
+            content = f.read()
+        return Response(
+            content=content,
+            media_type='application/json',
+            headers={'Content-Encoding': 'gzip'}
+        )
+    else:
+        # Fallback for old non-gzipped files
+        data = load_cached_data()
+        if data is None:
+            raise HTTPException(status_code=503, detail="Could not load cached data")
+        return Response(
+            content=json.dumps(data),
+            media_type='application/json'
+        )
 
 
 @app.get("/api/health")

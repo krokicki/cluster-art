@@ -16,8 +16,8 @@ cluster-art/
 ├── index.html     # Frontend SPA with all CSS/JS
 ├── pixi.toml      # Project config and dependencies
 ├── .env           # Local config overrides (optional, gitignored)
-├── cache/         # Cached JSON files (gitignored)
-│   └── <unix_timestamp>.json
+├── cache/         # Cached gzipped JSON files (gitignored)
+│   └── <unix_timestamp>.json.gz
 └── CLAUDE.md      # This file
 ```
 
@@ -39,8 +39,9 @@ Browser (index.html)          FastAPI (app.py)           Upstream
   - `GET /` - Serves index.html
   - `GET /api/cluster-status` - Returns latest cached file (fetches if none exists)
   - `GET /api/health` - Health check with cache info
-- **Background task**: Fetches upstream data periodically, saves to disk
-- **File caching**: Each fetch saved as `<timestamp>.json` in cache folder
+- **Background task**: Fetches upstream data periodically, optimizes and saves to disk
+- **File caching**: Each fetch transformed, gzipped, and saved as `<timestamp>.json.gz`
+- **Gzip serving**: Files served with `Content-Encoding: gzip` for automatic browser decompression
 - **CORS**: Enabled for all origins
 
 ### Configuration (Pydantic Settings)
@@ -63,8 +64,9 @@ CLUSTER_CACHE_FOLDER=/var/cache/cluster-viz
 ### Cache Files
 
 - Stored in `cache/` folder (configurable)
-- Filename format: `<unix_timestamp>.json` (from `fetchedAt` field)
-- Latest file served on API request
+- Filename format: `<unix_timestamp>.json.gz` (timestamp from `fetchedAt` field)
+- Data is optimized before saving (redundant fields removed, slots sparsified)
+- Latest file served on API request with `Content-Encoding: gzip`
 - On startup, uses existing cache if available
 
 ## Frontend (index.html)
@@ -154,22 +156,26 @@ All UI state saved to URL hash:
    ```
 2. Replace `currentLayoutStrategy` assignment
 
-## JSON Schema
+## JSON Schema (Optimized)
+
+The cached JSON is optimized for size (~96% reduction via gzip + schema optimization).
 
 ### Primary Data Structure
 
 ```typescript
-interface ClusterStatus {
-  hosts: { total: number; active: number };
-  cpus: { total: number; used: number; idle: number };
-  gpus: { total: number; used: number; idle: number };
+interface OptimizedClusterStatus {
   hostDetails: HostDetail[];
-  hardwareGroups: { [groupName: string]: string[] };
   activeUsers: number;
   userJobStats: { [username: string]: UserStats };
   motd: string;
   fetchedAt: string; // ISO 8601
-  raw: { jobs: Jobs; hosts: RawHost[]; metadata: Metadata; gpu_attribution: GpuAttribution[] };
+  raw: {
+    jobs: { all: Job[] };       // gpu_jobs removed (redundant)
+    gpu_attribution: GpuAttribution[];
+  };
+  // Removed: hosts, cpus, gpus (computable from hostDetails)
+  // Removed: hardwareGroups (embedded in hostDetails)
+  // Removed: raw.hosts, raw.metadata (redundant)
 }
 ```
 
@@ -184,8 +190,9 @@ interface HostDetail {
   utilization: number;       // 0-100 percentage
   users: string[];           // unique users on this host
   gpu_type: string;          // e.g., "NVIDIAH200", "TeslaT4", "NVIDIAL4"
-  cpuSlots: string[];        // usernames or "" for idle
-  gpuSlots: string[];        // usernames or "" for idle
+  hardwareGroup: string;     // e.g., "8GPU H200" (embedded, not looked up)
+  cpuSlots: { [index: string]: string };  // Sparse: {"0": "user1", "5": "user2"}
+  gpuSlots: { [index: string]: string };  // Sparse: only occupied slots
   load: {
     r15s: number;            // load average 15 seconds
     r1m: number;             // load average 1 minute

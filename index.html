@@ -1368,31 +1368,43 @@
             return colors;
         }
 
+        // Convert sparse slot format to array
+        function sparseToArray(sparseSlots, totalCount) {
+            const array = new Array(totalCount).fill('');
+            if (sparseSlots && typeof sparseSlots === 'object' && !Array.isArray(sparseSlots)) {
+                for (const [index, user] of Object.entries(sparseSlots)) {
+                    const idx = parseInt(index, 10);
+                    if (!isNaN(idx) && idx < totalCount) {
+                        array[idx] = user;
+                    }
+                }
+            } else if (Array.isArray(sparseSlots)) {
+                // Backwards compatibility: if it's already an array, use it directly
+                return sparseSlots;
+            }
+            return array;
+        }
+
         // Load cluster data from JSON
         async function loadClusterData() {
             try {
                 const response = await fetch('/api/cluster-status');
                 const data = await response.json();
 
-                // Create hostname to hardware group mapping
-                const hostnameToGroup = new Map();
-                if (data.hardwareGroups) {
-                    Object.entries(data.hardwareGroups).forEach(([groupName, hostnames]) => {
-                        hostnames.forEach(hostname => {
-                            hostnameToGroup.set(hostname, groupName);
-                        });
-                    });
-                }
-
                 // Extract resources from hostDetails
                 const allResources = [];
                 const allUsers = [];
 
                 data.hostDetails.forEach(host => {
-                    const hardwareGroup = hostnameToGroup.get(host.hostname) || 'Unknown';
+                    // Use embedded hardwareGroup directly (new format)
+                    const hardwareGroup = host.hardwareGroup || 'Unknown';
+
+                    // Convert sparse slots to arrays
+                    const cpuSlotsArray = sparseToArray(host.cpuSlots, host.cpus.total);
+                    const gpuSlotsArray = sparseToArray(host.gpuSlots, host.gpus.total);
 
                     // Add CPU resources
-                    host.cpuSlots.forEach((user, idx) => {
+                    cpuSlotsArray.forEach((user, idx) => {
                         const resource = new Resource(host.hostname, 'cpu', idx, user, host, hardwareGroup);
 
                         // Look up job info for CPU slot
@@ -1413,7 +1425,7 @@
                     });
 
                     // Add GPU resources
-                    host.gpuSlots.forEach((user, idx) => {
+                    gpuSlotsArray.forEach((user, idx) => {
                         const resource = new Resource(host.hostname, 'gpu', idx, user, host, hardwareGroup);
 
                         // Look up job info for GPU slot via gpu_attribution
