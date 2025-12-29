@@ -1465,11 +1465,12 @@
             resources.forEach(resource => {
                 const color = colorStrategy.getColor(resource);
                 ctx.fillStyle = color;
+                // Add +1 to width/height to prevent sub-pixel gaps between adjacent pixels
                 ctx.fillRect(
-                    resource.x * effectivePixelSize,
-                    resource.y * effectivePixelSize,
-                    effectivePixelSize,
-                    effectivePixelSize
+                    Math.floor(resource.x * effectivePixelSize),
+                    Math.floor(resource.y * effectivePixelSize),
+                    Math.ceil(effectivePixelSize) + 1,
+                    Math.ceil(effectivePixelSize) + 1
                 );
 
                 // Draw white border for hovered pixel
