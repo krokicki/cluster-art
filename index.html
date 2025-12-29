@@ -848,6 +848,10 @@
                 this.status = hostData?.status || 'unknown';
                 this.load = hostData?.load || {};
                 this.hardwareGroup = hardwareGroup || 'Unknown';
+
+                // Job info (populated later from raw data)
+                this.jobId = null;
+                this.jobName = null;
             }
 
             get isIdle() {
@@ -1389,13 +1393,41 @@
 
                     // Add CPU resources
                     host.cpuSlots.forEach((user, idx) => {
-                        allResources.push(new Resource(host.hostname, 'cpu', idx, user, host, hardwareGroup));
+                        const resource = new Resource(host.hostname, 'cpu', idx, user, host, hardwareGroup);
+
+                        // Look up job info for CPU slot
+                        if (user && data.raw?.jobs?.all) {
+                            const cpuJob = data.raw.jobs.all.find(job =>
+                                job.user === user &&
+                                job.status === 'RUN' &&
+                                job.exec_host && job.exec_host.includes(host.hostname)
+                            );
+                            if (cpuJob) {
+                                resource.jobId = cpuJob.job_id;
+                                resource.jobName = cpuJob.job_name;
+                            }
+                        }
+
+                        allResources.push(resource);
                         if (user && user !== '') allUsers.push(user);
                     });
 
                     // Add GPU resources
                     host.gpuSlots.forEach((user, idx) => {
-                        allResources.push(new Resource(host.hostname, 'gpu', idx, user, host, hardwareGroup));
+                        const resource = new Resource(host.hostname, 'gpu', idx, user, host, hardwareGroup);
+
+                        // Look up job info for GPU slot via gpu_attribution
+                        if (data.raw?.gpu_attribution) {
+                            const gpuAttr = data.raw.gpu_attribution.find(attr =>
+                                attr.hostname === host.hostname && attr.gpu_id === idx
+                            );
+                            if (gpuAttr) {
+                                resource.jobId = gpuAttr.job_id;
+                                resource.jobName = gpuAttr.job_name;
+                            }
+                        }
+
+                        allResources.push(resource);
                         if (user && user !== '') allUsers.push(user);
                     });
                 });
@@ -1972,12 +2004,6 @@
                             <div class="modal-label">HOST STATUS:</div>
                             <div class="modal-value">${resource.status}</div>
                         </div>
-                        ${resource.user ? `
-                        <div class="modal-info-row">
-                            <div class="modal-label">USER:</div>
-                            <div class="modal-value">${resource.user}</div>
-                        </div>
-                        ` : ''}
                         ${resource.gpuType ? `
                         <div class="modal-info-row">
                             <div class="modal-label">GPU TYPE:</div>
@@ -1985,6 +2011,30 @@
                         </div>
                         ` : ''}
                     </div>
+
+                    ${(resource.user || resource.jobId) ? `
+                    <div class="modal-section">
+                        <div class="modal-section-title">JOB INFO</div>
+                        ${resource.user ? `
+                        <div class="modal-info-row">
+                            <div class="modal-label">USER:</div>
+                            <div class="modal-value">${resource.user}</div>
+                        </div>
+                        ` : ''}
+                        ${resource.jobId ? `
+                        <div class="modal-info-row">
+                            <div class="modal-label">JOB ID:</div>
+                            <div class="modal-value">${resource.jobId}</div>
+                        </div>
+                        ` : ''}
+                        ${resource.jobName ? `
+                        <div class="modal-info-row">
+                            <div class="modal-label">JOB NAME:</div>
+                            <div class="modal-value">${resource.jobName}</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                    ` : ''}
                 </div>
             `;
 
