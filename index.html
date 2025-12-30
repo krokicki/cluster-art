@@ -934,9 +934,12 @@
                 <button id="time-travel-loop" class="time-travel-button" title="Loop playback" style="font-size: 16px;">&#8635;</button>
                 <button id="time-travel-next" class="time-travel-button" title="Next snapshot">&gt;|</button>
                 <select id="time-travel-speed">
-                    <option value="100" selected>100x</option>
-                    <option value="1000">1000x</option>
-                    <option value="10000">10000x</option>
+                    <option value="100">10e2x</option>
+                    <option value="1000" selected>10e3x</option>
+                    <option value="10000">10e4x</option>
+                    <option value="100000">10e5x</option>
+                    <option value="1000000">10e6x</option>
+                    <option value="10000000">10e7x</option>
                 </select>
                 <button id="time-travel-live" class="time-travel-button time-travel-live active" title="Return to LIVE">LIVE</button>
             </div>
@@ -1000,7 +1003,7 @@
         let timeTravelTimestamp = null;
         let timeTravelPlaying = false;
         let timeTravelLoop = false;
-        let timeTravelSpeed = 100;
+        let timeTravelSpeed = 1000;
         let timeTravelExpanded = false;
         let availableTimepoints = null;
         let currentTimepointIndex = 0;
