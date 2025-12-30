@@ -913,6 +913,10 @@
                     <div class="help-key">SHIFT+4</div>
                     <div class="help-desc">User Territories</div>
                 </div>
+                <div class="help-item">
+                    <div class="help-key">SHIFT+5</div>
+                    <div class="help-desc">Hilbert Curve</div>
+                </div>
             </div>
 
             <div class="help-section">
@@ -1563,6 +1567,67 @@
                         idleX = 0;
                         idleY++;
                     }
+                });
+            }
+        }
+
+        // Hilbert curve layout - space-filling curve preserving locality
+        class HilbertCurveLayout extends LayoutStrategy {
+            getName() {
+                return 'HILBERT';
+            }
+
+            // Convert 1D index to 2D Hilbert curve coordinates
+            hilbertD2xy(n, d) {
+                let x = 0, y = 0;
+                let s = 1;
+                let rx, ry, t = d;
+
+                while (s < n) {
+                    rx = 1 & (t / 2);
+                    ry = 1 & (t ^ rx);
+
+                    // Rotate quadrant
+                    if (ry === 0) {
+                        if (rx === 1) {
+                            x = s - 1 - x;
+                            y = s - 1 - y;
+                        }
+                        [x, y] = [y, x];
+                    }
+
+                    x += s * rx;
+                    y += s * ry;
+                    t = Math.floor(t / 4);
+                    s *= 2;
+                }
+
+                return { x, y };
+            }
+
+            layout(resources, gridWidth, gridHeight) {
+                if (resources.length === 0) return;
+
+                // Sort resources by hostname to keep hosts together
+                const sortedResources = [...resources].sort((a, b) => {
+                    if (a.hostname !== b.hostname) {
+                        return a.hostname.localeCompare(b.hostname);
+                    }
+                    // Within same host, GPUs first, then CPUs
+                    if (a.type !== b.type) {
+                        return a.type === 'gpu' ? -1 : 1;
+                    }
+                    return a.index - b.index;
+                });
+
+                // Calculate Hilbert curve order (must be power of 2)
+                const n = Math.pow(2, Math.ceil(Math.log2(Math.sqrt(resources.length))));
+
+                // Map each resource to Hilbert curve position
+                sortedResources.forEach((resource, idx) => {
+                    const { x, y } = this.hilbertD2xy(n, idx);
+                    resource.x = x;
+                    resource.y = y;
                 });
             }
         }
@@ -2406,7 +2471,8 @@
                 new HostnameHierarchyLayout(),
                 new RackTopologyLayout(),
                 new HardwareGroupLayout(),
-                new UserTerritoriesLayout()
+                new UserTerritoriesLayout(),
+                new HilbertCurveLayout()
             ];
         }
 
