@@ -349,6 +349,15 @@
             opacity: 1;
         }
 
+        #current-layout {
+            padding: 12px 16px;
+            border-top: 2px solid #00ff00;
+            text-align: center;
+            color: #ffff00;
+            font-size: 9px;
+            background: rgba(255, 255, 0, 0.1);
+        }
+
         #current-mode {
             padding: 12px 16px;
             border-top: 2px solid #00ff00;
@@ -887,6 +896,18 @@
             </div>
 
             <div class="help-section">
+                <div class="help-section-title">LAYOUT MODES</div>
+                <div class="help-item">
+                    <div class="help-key">SHIFT+1</div>
+                    <div class="help-desc">Linear</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">SHIFT+2</div>
+                    <div class="help-desc">Rack Topology</div>
+                </div>
+            </div>
+
+            <div class="help-section">
                 <div class="help-section-title">PANELS</div>
                 <div class="help-item">
                     <div class="help-key">L</div>
@@ -912,6 +933,7 @@
     <div id="legend">
         <div id="legend-title">LEGEND</div>
         <div id="legend-content">
+            <div id="current-layout"></div>
             <div id="current-mode"></div>
             <div id="legend-items"></div>
         </div>
@@ -1020,6 +1042,7 @@
                 ht: Math.round(canvasHeight),
                 z: zoomLevel.toFixed(2),
                 m: currentColorMode,
+                ly: currentLayoutMode,
                 l: legendExpanded ? 1 : 0,
                 h: helpExpanded ? 1 : 0,
                 te: timeTravelExpanded ? 1 : 0
@@ -1051,6 +1074,7 @@
             if (params.has('ht')) canvasHeight = parseFloat(params.get('ht'));
             if (params.has('z')) zoomLevel = parseFloat(params.get('z'));
             if (params.has('m')) currentColorMode = parseInt(params.get('m'));
+            if (params.has('ly')) currentLayoutMode = parseInt(params.get('ly'));
             if (params.has('l')) legendExpanded = params.get('l') === '1';
             if (params.has('h')) helpExpanded = params.get('h') === '1';
             if (params.has('te')) timeTravelExpanded = params.get('te') === '1';
@@ -1082,6 +1106,9 @@
 
         let currentColorMode = 1;
         let colorStrategies = [];
+
+        let currentLayoutMode = 1;
+        let layoutStrategies = [];
 
         // Resource model
         class Resource {
@@ -1118,13 +1145,19 @@
 
         // Layout strategy interface
         class LayoutStrategy {
+            getName() {
+                throw new Error('getName() must be implemented');
+            }
             layout(resources, gridWidth, gridHeight) {
                 throw new Error('layout() must be implemented');
             }
         }
 
-        // Hostname-based hierarchical layout
+        // Linear layout grouped by hostname
         class HostnameHierarchyLayout extends LayoutStrategy {
+            getName() {
+                return 'LINEAR';
+            }
             layout(resources, gridWidth, gridHeight) {
                 // Group resources by hostname
                 const hostGroups = new Map();
@@ -1167,8 +1200,11 @@
             }
         }
 
-        // User-based layout (for future use)
+        // User-based layout
         class UserGroupLayout extends LayoutStrategy {
+            getName() {
+                return 'BY USER';
+            }
             layout(resources, gridWidth, gridHeight) {
                 // Group resources by user
                 const userGroups = new Map();
@@ -1199,6 +1235,132 @@
                             x = 0;
                             y++;
                         }
+                    });
+                });
+            }
+        }
+
+        // Rack topology layout - maps hostnames to physical rack positions
+        class RackTopologyLayout extends LayoutStrategy {
+            getName() {
+                return 'RACK';
+            }
+
+            parseHostname(hostname) {
+                // Parse "h04u08" -> { row: "h04", unit: 8 }
+                const match = hostname.match(/^([a-z]+\d+)u(\d+)$/i);
+                if (match) {
+                    return { row: match[1].toLowerCase(), unit: parseInt(match[2]) };
+                }
+                return null;
+            }
+
+            layout(resources, gridWidth, gridHeight) {
+                // Group resources by hostname
+                const hostGroups = new Map();
+                resources.forEach(resource => {
+                    if (!hostGroups.has(resource.hostname)) {
+                        hostGroups.set(resource.hostname, []);
+                    }
+                    hostGroups.get(resource.hostname).push(resource);
+                });
+
+                // Parse hostnames and group by row
+                const rowMap = new Map(); // row -> [{hostname, unit, resources}]
+                hostGroups.forEach((hostResources, hostname) => {
+                    const parsed = this.parseHostname(hostname);
+                    if (parsed) {
+                        if (!rowMap.has(parsed.row)) {
+                            rowMap.set(parsed.row, []);
+                        }
+                        rowMap.get(parsed.row).push({
+                            hostname,
+                            unit: parsed.unit,
+                            resources: hostResources
+                        });
+                    } else {
+                        // Fallback for unparseable hostnames
+                        if (!rowMap.has('other')) {
+                            rowMap.set('other', []);
+                        }
+                        rowMap.get('other').push({
+                            hostname,
+                            unit: 0,
+                            resources: hostResources
+                        });
+                    }
+                });
+
+                // Sort rows alphabetically
+                const sortedRows = Array.from(rowMap.keys()).sort();
+
+                // Find max slots per host and max units per row
+                let maxCpuSlots = 0;
+                let maxGpuSlots = 0;
+                hostGroups.forEach(hostResources => {
+                    const cpuCount = hostResources.filter(r => r.type === 'cpu').length;
+                    const gpuCount = hostResources.filter(r => r.type === 'gpu').length;
+                    maxCpuSlots = Math.max(maxCpuSlots, cpuCount);
+                    maxGpuSlots = Math.max(maxGpuSlots, gpuCount);
+                });
+
+                // Each host is one row: GPU slots first, then CPU slots
+                const hostWidth = maxGpuSlots + maxCpuSlots;
+
+                // Calculate actual height of each rack (number of hosts)
+                const rackHeights = sortedRows.map(rowName => rowMap.get(rowName).length);
+                const totalHosts = rackHeights.reduce((a, b) => a + b, 0);
+
+                // Aim for roughly square aspect ratio
+                const numRacks = sortedRows.length;
+                const avgRackHeight = totalHosts / numRacks;
+                const racksPerRow = Math.max(1, Math.ceil(Math.sqrt(numRacks * (avgRackHeight / hostWidth))));
+
+                // Layout racks in a grid, tracking actual heights per row
+                const rowHeights = []; // Track max height of each grid row
+                const rackPositions = []; // Store {gridCol, gridRow} for each rack
+
+                sortedRows.forEach((rowName, rackIndex) => {
+                    const gridCol = rackIndex % racksPerRow;
+                    const gridRow = Math.floor(rackIndex / racksPerRow);
+                    rackPositions.push({ gridCol, gridRow });
+
+                    // Track max height for this grid row
+                    const rackHeight = rackHeights[rackIndex];
+                    if (!rowHeights[gridRow]) rowHeights[gridRow] = 0;
+                    rowHeights[gridRow] = Math.max(rowHeights[gridRow], rackHeight);
+                });
+
+                // Calculate cumulative Y offsets for each grid row
+                const rowYOffsets = [0];
+                for (let i = 0; i < rowHeights.length - 1; i++) {
+                    rowYOffsets.push(rowYOffsets[i] + rowHeights[i]);
+                }
+
+                // Layout each rack
+                sortedRows.forEach((rowName, rackIndex) => {
+                    const hosts = rowMap.get(rowName);
+                    hosts.sort((a, b) => a.unit - b.unit);
+
+                    const { gridCol, gridRow } = rackPositions[rackIndex];
+                    const rackX = gridCol * hostWidth;
+                    const rackY = rowYOffsets[gridRow];
+
+                    hosts.forEach((host, hostIndex) => {
+                        const cpuResources = host.resources.filter(r => r.type === 'cpu');
+                        const gpuResources = host.resources.filter(r => r.type === 'gpu');
+
+                        // Place GPU slots first (left side of host line)
+                        gpuResources.forEach((resource, idx) => {
+                            resource.x = rackX + idx;
+                            resource.y = rackY + hostIndex;
+                        });
+
+                        // Place CPU slots after GPUs (right side of host line)
+                        cpuResources.forEach((resource, idx) => {
+                            resource.x = rackX + maxGpuSlots + idx;
+                            resource.y = rackY + hostIndex;
+                        });
                     });
                 });
             }
@@ -1783,8 +1945,10 @@
 
             // Re-initialize and redraw
             initializeColorStrategies();
+            initializeLayoutStrategies();
             reflowLayout();
             updateCurrentModeDisplay();
+            updateCurrentLayoutDisplay();
             populateLegend();
         }
 
@@ -1910,8 +2074,10 @@
             const loaded = await loadClusterData();
             if (loaded) {
                 initializeColorStrategies();
+                initializeLayoutStrategies();
                 reflowLayout();
                 updateCurrentModeDisplay();
+                updateCurrentLayoutDisplay();
                 populateLegend();
             }
         }
@@ -2033,6 +2199,33 @@
             colorStrategies.forEach(strategy => strategy.initialize(resources));
         }
 
+        // Initialize layout strategies
+        function initializeLayoutStrategies() {
+            layoutStrategies = [
+                new HostnameHierarchyLayout(),
+                new RackTopologyLayout()
+            ];
+        }
+
+        // Update current layout display
+        function updateCurrentLayoutDisplay() {
+            const layoutDisplay = document.getElementById('current-layout');
+            if (layoutDisplay && layoutStrategies.length > 0) {
+                const strategy = layoutStrategies[currentLayoutMode - 1];
+                layoutDisplay.textContent = 'LAYOUT: ' + strategy.getName();
+            }
+        }
+
+        // Switch layout mode
+        function switchLayoutMode(mode) {
+            if (mode >= 1 && mode <= layoutStrategies.length) {
+                currentLayoutMode = mode;
+                updateCurrentLayoutDisplay();
+                reflowLayout();
+                saveStateToURL();
+            }
+        }
+
         // Populate legend
         function populateLegend() {
             const legendItems = document.getElementById('legend-items');
@@ -2119,12 +2312,14 @@
             const loaded = await loadClusterData();
 
             if (loaded) {
-                // Initialize color strategies
+                // Initialize strategies
                 initializeColorStrategies();
+                initializeLayoutStrategies();
 
                 // Apply layout with proper reflow (accounts for zoom level)
                 reflowLayout();
                 updateCurrentModeDisplay();
+                updateCurrentLayoutDisplay();
                 populateLegend();
 
                 // Apply panel states from URL
@@ -2181,18 +2376,20 @@
             const loaded = await loadClusterData();
 
             if (loaded) {
-                // Re-initialize color strategies with new data
+                // Re-initialize strategies with new data
                 initializeColorStrategies();
+                initializeLayoutStrategies();
 
                 // Re-apply layout (preserves zoom, canvas position/size)
-                const layoutStrategy = new HostnameHierarchyLayout();
+                const layoutStrategy = layoutStrategies[currentLayoutMode - 1];
                 applyLayout(layoutStrategy);
 
                 // Redraw with current settings preserved
                 draw();
 
-                // Update legend with new data
+                // Update displays with new data
                 updateCurrentModeDisplay();
+                updateCurrentLayoutDisplay();
                 populateLegend();
 
                 console.log(`[${new Date().toISOString()}] Cluster data refreshed successfully`);
@@ -2484,8 +2681,8 @@
             gridHeight = Math.floor(canvasHeight / effectivePixelSize);
 
             // Re-layout resources to fit new grid
-            if (resources.length > 0) {
-                const layoutStrategy = new HostnameHierarchyLayout();
+            if (resources.length > 0 && layoutStrategies.length > 0) {
+                const layoutStrategy = layoutStrategies[currentLayoutMode - 1];
                 applyLayout(layoutStrategy);
                 draw();
             }
@@ -2601,10 +2798,18 @@
                 toggleTimeTravel();
             }
 
-            // Number keys 1-9 to switch color modes
-            const key = parseInt(e.key);
-            if (key >= 1 && key <= 9) {
-                switchColorMode(key);
+            // Number keys: Shift+N for layouts, N for color modes
+            // Use e.code to handle Shift+number (since e.key becomes @, #, etc.)
+            const digitMatch = e.code?.match(/^Digit(\d)$/);
+            if (digitMatch) {
+                const key = parseInt(digitMatch[1]);
+                if (e.shiftKey) {
+                    // Shift+1-9 for layout modes
+                    switchLayoutMode(key);
+                } else {
+                    // 1-9 for color modes
+                    switchColorMode(key);
+                }
             }
 
             // ESC to close modal

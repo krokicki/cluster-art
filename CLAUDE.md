@@ -85,9 +85,11 @@ class Resource {
 }
 ```
 
-**Layout Strategies** - Calculate grid positions:
-- `HostnameHierarchyLayout` - Groups by hostname (default)
-- `UserGroupLayout` - Groups by user (alternative)
+**Layout Strategies** - Calculate grid positions (Shift+N to switch):
+| Key | Strategy               | Description                      |
+|-----|------------------------|----------------------------------|
+| Shift+1 | HostnameHierarchyLayout | Linear layout grouped by hostname (default) |
+| Shift+2 | RackTopologyLayout | Physical rack positions from hostname parsing |
 
 **Color Strategies** - 9 visualization modes:
 | Key | Strategy               | Description                      |
@@ -147,16 +149,17 @@ All UI state saved to URL hash:
 
 ### Adding a New Layout Strategy
 
-1. Create class implementing:
+1. Create class extending `LayoutStrategy`:
    ```javascript
-   class MyLayout {
-     apply(resources, canvasWidth, canvasHeight) {
+   class MyLayout extends LayoutStrategy {
+     getName() { return 'MY LAYOUT'; }
+     layout(resources, gridWidth, gridHeight) {
        // Set resource.x and resource.y for each resource
-       return { width, height }; // required grid dimensions
      }
    }
    ```
-2. Replace `currentLayoutStrategy` assignment
+2. Add to `layoutStrategies` array in `initializeLayoutStrategies()`
+3. Update help panel with new Shift+N key
 
 ## JSON Schema (Optimized)
 
@@ -293,6 +296,7 @@ JSON Schema files are available in `schemas/`:
 | Click resource | Open detail modal |
 | Arrow keys (in modal) | Navigate resources |
 | Keys 1-9 | Change color mode |
+| Shift+1-2 | Change layout mode |
 | L | Toggle legend panel |
 | T | Toggle time travel panel |
 | ? | Toggle help panel |
