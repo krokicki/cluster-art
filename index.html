@@ -905,6 +905,14 @@
                     <div class="help-key">SHIFT+2</div>
                     <div class="help-desc">Rack Topology</div>
                 </div>
+                <div class="help-item">
+                    <div class="help-key">SHIFT+3</div>
+                    <div class="help-desc">Hardware Groups</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">SHIFT+4</div>
+                    <div class="help-desc">User Territories</div>
+                </div>
             </div>
 
             <div class="help-section">
@@ -1362,6 +1370,199 @@
                             resource.y = rackY + hostIndex;
                         });
                     });
+                });
+            }
+        }
+
+        // Hardware group islands layout - clusters by hardware type
+        class HardwareGroupLayout extends LayoutStrategy {
+            getName() {
+                return 'HARDWARE';
+            }
+
+            layout(resources, gridWidth, gridHeight) {
+                // Group resources by hardware group, then by hostname
+                const groupMap = new Map(); // hardwareGroup -> hostname -> resources[]
+                resources.forEach(resource => {
+                    const group = resource.hardwareGroup || 'Unknown';
+                    if (!groupMap.has(group)) {
+                        groupMap.set(group, new Map());
+                    }
+                    const hostMap = groupMap.get(group);
+                    if (!hostMap.has(resource.hostname)) {
+                        hostMap.set(resource.hostname, []);
+                    }
+                    hostMap.get(resource.hostname).push(resource);
+                });
+
+                // Sort groups by name
+                const sortedGroups = Array.from(groupMap.keys()).sort();
+
+                // Find max slots per host
+                let maxCpuSlots = 0;
+                let maxGpuSlots = 0;
+                resources.forEach(resource => {
+                    // Count per hostname would be better but this is simpler
+                });
+                groupMap.forEach(hostMap => {
+                    hostMap.forEach(hostResources => {
+                        const cpuCount = hostResources.filter(r => r.type === 'cpu').length;
+                        const gpuCount = hostResources.filter(r => r.type === 'gpu').length;
+                        maxCpuSlots = Math.max(maxCpuSlots, cpuCount);
+                        maxGpuSlots = Math.max(maxGpuSlots, gpuCount);
+                    });
+                });
+
+                const hostWidth = maxGpuSlots + maxCpuSlots;
+
+                // Calculate heights for each group
+                const groupHeights = sortedGroups.map(group => groupMap.get(group).size);
+                const totalHosts = groupHeights.reduce((a, b) => a + b, 0);
+
+                // Aim for roughly square aspect ratio
+                const numGroups = sortedGroups.length;
+                const avgGroupHeight = totalHosts / numGroups;
+                const groupsPerRow = Math.max(1, Math.ceil(Math.sqrt(numGroups * (avgGroupHeight / hostWidth))));
+
+                // Layout groups in a grid, tracking actual heights per row
+                const rowHeights = [];
+                const groupPositions = [];
+
+                sortedGroups.forEach((groupName, groupIndex) => {
+                    const gridCol = groupIndex % groupsPerRow;
+                    const gridRow = Math.floor(groupIndex / groupsPerRow);
+                    groupPositions.push({ gridCol, gridRow });
+
+                    const groupHeight = groupHeights[groupIndex];
+                    if (!rowHeights[gridRow]) rowHeights[gridRow] = 0;
+                    rowHeights[gridRow] = Math.max(rowHeights[gridRow], groupHeight);
+                });
+
+                // Calculate cumulative Y offsets
+                const rowYOffsets = [0];
+                for (let i = 0; i < rowHeights.length - 1; i++) {
+                    rowYOffsets.push(rowYOffsets[i] + rowHeights[i]);
+                }
+
+                // Layout each group
+                sortedGroups.forEach((groupName, groupIndex) => {
+                    const hostMap = groupMap.get(groupName);
+                    const sortedHostnames = Array.from(hostMap.keys()).sort();
+
+                    const { gridCol, gridRow } = groupPositions[groupIndex];
+                    const groupX = gridCol * hostWidth;
+                    const groupY = rowYOffsets[gridRow];
+
+                    sortedHostnames.forEach((hostname, hostIndex) => {
+                        const hostResources = hostMap.get(hostname);
+                        const cpuResources = hostResources.filter(r => r.type === 'cpu');
+                        const gpuResources = hostResources.filter(r => r.type === 'gpu');
+
+                        // Place GPU slots first
+                        gpuResources.forEach((resource, idx) => {
+                            resource.x = groupX + idx;
+                            resource.y = groupY + hostIndex;
+                        });
+
+                        // Place CPU slots after GPUs
+                        cpuResources.forEach((resource, idx) => {
+                            resource.x = groupX + maxGpuSlots + idx;
+                            resource.y = groupY + hostIndex;
+                        });
+                    });
+                });
+            }
+        }
+
+        // User territories layout - treemap-style by user
+        class UserTerritoriesLayout extends LayoutStrategy {
+            getName() {
+                return 'USERS';
+            }
+
+            layout(resources, gridWidth, gridHeight) {
+                // Separate idle and active resources
+                const idleResources = [];
+                const userMap = new Map(); // user -> resources[]
+
+                resources.forEach(resource => {
+                    if (!resource.user || resource.user === '') {
+                        idleResources.push(resource);
+                    } else {
+                        if (!userMap.has(resource.user)) {
+                            userMap.set(resource.user, []);
+                        }
+                        userMap.get(resource.user).push(resource);
+                    }
+                });
+
+                // Sort users by slot count (descending) for better packing
+                const sortedUsers = Array.from(userMap.keys()).sort((a, b) => {
+                    return userMap.get(b).length - userMap.get(a).length;
+                });
+
+                // Use full canvas width
+                const targetWidth = gridWidth;
+
+                // Simple row-based treemap: fill rows left to right
+                let currentX = 0;
+                let currentY = 0;
+                let rowHeight = 0;
+                let maxX = 0;
+
+                sortedUsers.forEach(user => {
+                    const userResources = userMap.get(user);
+                    const slotCount = userResources.length;
+
+                    // Calculate rectangle dimensions for this user
+                    const userWidth = Math.ceil(Math.sqrt(slotCount * 1.5));
+
+                    // Check if we need to wrap to next row
+                    if (currentX + userWidth > targetWidth && currentX > 0) {
+                        currentX = 0;
+                        currentY += rowHeight;
+                        rowHeight = 0;
+                    }
+
+                    // Place resources in a rectangle for this user
+                    let localX = 0;
+                    let localY = 0;
+                    userResources.forEach((resource) => {
+                        resource.x = currentX + localX;
+                        resource.y = currentY + localY;
+
+                        localX++;
+                        if (localX >= userWidth) {
+                            localX = 0;
+                            localY++;
+                        }
+                    });
+
+                    // Update position for next user
+                    const actualHeight = Math.ceil(slotCount / userWidth);
+                    rowHeight = Math.max(rowHeight, actualHeight);
+                    maxX = Math.max(maxX, currentX + userWidth);
+                    currentX += userWidth;
+                });
+
+                // Place idle slots at the end, filling horizontally across full canvas width
+                // Start after the last row of active users
+                const idleStartY = currentY + rowHeight;
+                let idleX = 0;
+                let idleY = idleStartY;
+
+                // Use full canvas width for idle slots
+                const idleRowWidth = gridWidth;
+
+                idleResources.forEach((resource) => {
+                    resource.x = idleX;
+                    resource.y = idleY;
+
+                    idleX++;
+                    if (idleX >= idleRowWidth) {
+                        idleX = 0;
+                        idleY++;
+                    }
                 });
             }
         }
@@ -2203,7 +2404,9 @@
         function initializeLayoutStrategies() {
             layoutStrategies = [
                 new HostnameHierarchyLayout(),
-                new RackTopologyLayout()
+                new RackTopologyLayout(),
+                new HardwareGroupLayout(),
+                new UserTerritoriesLayout()
             ];
         }
 
