@@ -921,6 +921,10 @@
                     <div class="help-key">SHIFT+6</div>
                     <div class="help-desc">Spiral</div>
                 </div>
+                <div class="help-item">
+                    <div class="help-key">SHIFT+7</div>
+                    <div class="help-desc">Job Grouping</div>
+                </div>
             </div>
 
             <div class="help-section">
@@ -1695,6 +1699,93 @@
                 sortedResources.forEach(r => {
                     r.x -= minX;
                     r.y -= minY;
+                });
+            }
+        }
+
+        // Job grouping layout - groups by job_id to show job footprints
+        class JobGroupingLayout extends LayoutStrategy {
+            getName() {
+                return 'JOBS';
+            }
+
+            layout(resources, gridWidth, gridHeight) {
+                // Separate resources by job
+                const jobMap = new Map(); // jobId -> resources[]
+                const idleResources = [];
+
+                resources.forEach(resource => {
+                    if (!resource.jobId || resource.jobId === '') {
+                        idleResources.push(resource);
+                    } else {
+                        if (!jobMap.has(resource.jobId)) {
+                            jobMap.set(resource.jobId, []);
+                        }
+                        jobMap.get(resource.jobId).push(resource);
+                    }
+                });
+
+                // Sort jobs by slot count (descending)
+                const sortedJobs = Array.from(jobMap.keys()).sort((a, b) => {
+                    return jobMap.get(b).length - jobMap.get(a).length;
+                });
+
+                // Use full canvas width
+                const targetWidth = gridWidth;
+
+                // Layout jobs as rectangular blocks
+                let currentX = 0;
+                let currentY = 0;
+                let rowHeight = 0;
+
+                sortedJobs.forEach(jobId => {
+                    const jobResources = jobMap.get(jobId);
+                    const slotCount = jobResources.length;
+
+                    // Calculate rectangle dimensions for this job
+                    const jobWidth = Math.ceil(Math.sqrt(slotCount * 1.5));
+
+                    // Check if we need to wrap to next row
+                    if (currentX + jobWidth > targetWidth && currentX > 0) {
+                        currentX = 0;
+                        currentY += rowHeight;
+                        rowHeight = 0;
+                    }
+
+                    // Place resources in a rectangle for this job
+                    let localX = 0;
+                    let localY = 0;
+                    jobResources.forEach((resource) => {
+                        resource.x = currentX + localX;
+                        resource.y = currentY + localY;
+
+                        localX++;
+                        if (localX >= jobWidth) {
+                            localX = 0;
+                            localY++;
+                        }
+                    });
+
+                    // Update position for next job
+                    const actualHeight = Math.ceil(slotCount / jobWidth);
+                    rowHeight = Math.max(rowHeight, actualHeight);
+                    currentX += jobWidth;
+                });
+
+                // Place idle slots at the end
+                const idleStartY = currentY + rowHeight;
+                let idleX = 0;
+                let idleY = idleStartY;
+
+                idleResources.forEach((resource) => {
+                    resource.x = idleX;
+                    resource.y = idleY;
+
+                    idleX++;
+                    if (idleX >= gridWidth) {
+                        idleX = 0;
+                        idleY++;
+                    }
                 });
             }
         }
@@ -2540,7 +2631,8 @@
                 new HardwareGroupLayout(),
                 new UserTerritoriesLayout(),
                 new HilbertCurveLayout(),
-                new SpiralLayout()
+                new SpiralLayout(),
+                new JobGroupingLayout()
             ];
         }
 
