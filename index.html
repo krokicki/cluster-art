@@ -915,27 +915,23 @@
                 </div>
                 <div class="help-item">
                     <div class="help-key">SHIFT+5</div>
-                    <div class="help-desc">Hilbert Curve</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-key">SHIFT+6</div>
-                    <div class="help-desc">Spiral</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-key">SHIFT+7</div>
                     <div class="help-desc">Job Grouping</div>
                 </div>
                 <div class="help-item">
+                    <div class="help-key">SHIFT+6</div>
+                    <div class="help-desc">Idle Compression</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">SHIFT+7</div>
+                    <div class="help-desc">Hilbert Curve</div>
+                </div>
+                <div class="help-item">
                     <div class="help-key">SHIFT+8</div>
-                    <div class="help-desc">User Rows</div>
+                    <div class="help-desc">Spiral</div>
                 </div>
                 <div class="help-item">
                     <div class="help-key">SHIFT+9</div>
                     <div class="help-desc">Radial Sunburst</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-key">SHIFT+0</div>
-                    <div class="help-desc">Idle Compression</div>
                 </div>
             </div>
 
@@ -1786,72 +1782,6 @@
 
                 // Place idle slots at the end
                 const idleStartY = currentY + rowHeight;
-                let idleX = 0;
-                let idleY = idleStartY;
-
-                idleResources.forEach((resource) => {
-                    resource.x = idleX;
-                    resource.y = idleY;
-
-                    idleX++;
-                    if (idleX >= gridWidth) {
-                        idleX = 0;
-                        idleY++;
-                    }
-                });
-            }
-        }
-
-        // User rows layout - each user is a row, slots extend horizontally
-        class UserColumnsLayout extends LayoutStrategy {
-            getName() {
-                return 'USER ROWS';
-            }
-
-            layout(resources, gridWidth, gridHeight) {
-                // Group resources by user
-                const userMap = new Map(); // user -> resources[]
-                const idleResources = [];
-
-                resources.forEach(resource => {
-                    if (!resource.user || resource.user === '') {
-                        idleResources.push(resource);
-                    } else {
-                        if (!userMap.has(resource.user)) {
-                            userMap.set(resource.user, []);
-                        }
-                        userMap.get(resource.user).push(resource);
-                    }
-                });
-
-                // Sort users alphabetically
-                const sortedUsers = Array.from(userMap.keys()).sort();
-
-                // Each user gets rows, slots wrap at canvas width
-                let currentY = 0;
-
-                sortedUsers.forEach(user => {
-                    const userResources = userMap.get(user);
-
-                    // Place slots horizontally, wrapping at gridWidth
-                    let x = 0;
-                    let y = currentY;
-                    userResources.forEach((resource) => {
-                        resource.x = x;
-                        resource.y = y;
-                        x++;
-                        if (x >= gridWidth) {
-                            x = 0;
-                            y++;
-                        }
-                    });
-
-                    // Move to next row after this user's slots
-                    currentY = (x > 0) ? y + 1 : y;
-                });
-
-                // Place idle slots in remaining rows
-                const idleStartY = currentY;
                 let idleX = 0;
                 let idleY = idleStartY;
 
@@ -2885,12 +2815,11 @@
                 new RackTopologyLayout(),
                 new HardwareGroupLayout(),
                 new UserTerritoriesLayout(),
+                new JobGroupingLayout(),
+                new IdleCompressionLayout(),
                 new HilbertCurveLayout(),
                 new SpiralLayout(),
-                new JobGroupingLayout(),
-                new UserColumnsLayout(),
-                new RadialSunburstLayout(),
-                new IdleCompressionLayout()
+                new RadialSunburstLayout()
             ];
         }
 
@@ -3491,9 +3420,8 @@
             if (digitMatch) {
                 const key = parseInt(digitMatch[1]);
                 if (e.shiftKey) {
-                    // Shift+1-9 for layout modes, Shift+0 = layout 10
-                    const layoutMode = key === 0 ? 10 : key;
-                    switchLayoutMode(layoutMode);
+                    // Shift+1-9 for layout modes
+                    switchLayoutMode(key);
                 } else {
                     // 1-9 for color modes
                     switchColorMode(key);
