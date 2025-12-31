@@ -2018,9 +2018,8 @@
         class HostnameColorStrategy extends ColorStrategy {
             initialize(resources) {
                 const hostnames = Array.from(new Set(resources.map(r => r.hostname))).sort();
-                const colors = generateRandomColors(hostnames.length);
-                hostnames.forEach((hostname, i) => {
-                    this.colorMap.set(hostname, colors[i]);
+                hostnames.forEach((hostname) => {
+                    this.colorMap.set(hostname, hashStringToColor(hostname));
                 });
             }
 
@@ -2048,9 +2047,31 @@
         class RowColorStrategy extends ColorStrategy {
             initialize(resources) {
                 const rows = Array.from(new Set(resources.map(r => r.row))).sort();
-                const colors = generateRandomColors(rows.length);
+                // Distinct colors that are easily distinguishable
+                const distinctColors = [
+                    '#e6194b', // red
+                    '#3cb44b', // green
+                    '#ffe119', // yellow
+                    '#4363d8', // blue
+                    '#f58231', // orange
+                    '#911eb4', // purple
+                    '#42d4f4', // cyan
+                    '#f032e6', // magenta
+                    '#bfef45', // lime
+                    '#fabed4', // pink
+                    '#469990', // teal
+                    '#dcbeff', // lavender
+                    '#9a6324', // brown
+                    '#fffac8', // beige
+                    '#800000', // maroon
+                    '#aaffc3', // mint
+                    '#808000', // olive
+                    '#ffd8b1', // apricot
+                    '#000075', // navy
+                    '#a9a9a9', // grey
+                ];
                 rows.forEach((row, i) => {
-                    this.colorMap.set(row, colors[i]);
+                    this.colorMap.set(row, distinctColors[i % distinctColors.length]);
                 });
             }
 
@@ -2310,6 +2331,21 @@
                 colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
             }
             return colors;
+        }
+
+        function hashStringToColor(str) {
+            // Simple string hash function
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32bit integer
+            }
+            // Convert hash to HSL color
+            const hue = Math.abs(hash % 360);
+            const saturation = 60 + Math.abs((hash >> 8) % 20);
+            const lightness = 50 + Math.abs((hash >> 16) % 20);
+            return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
         }
 
         function getHeatMapColor(value, min, max) {
