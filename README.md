@@ -7,6 +7,7 @@ Artistic HPC cluster visualization with a vintage video game aesthetic.
 ## Quick Start
 
 ```bash
+pixi install
 pixi run serve
 ```
 

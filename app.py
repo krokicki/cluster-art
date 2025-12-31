@@ -18,85 +18,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic_settings import BaseSettings
-import httpx
 
+from fetch_cache import (
+    Settings,
+    get_settings,
+    fetch_and_cache_async,
+)
 
-class Settings(BaseSettings):
-    """Application settings loaded from environment variables"""
-    upstream_url: str = "https://cluster-status.int.janelia.org/api/cluster-status"
-    fetch_interval: int = 120  # seconds
-    cache_folder: Path = Path("cache")
-
-    model_config = {
-        "env_prefix": "CLUSTER_",
-        "env_file": ".env",
-    }
-
-
-settings = Settings()
+settings = get_settings()
 
 # Global state
 last_fetch_time: Optional[datetime] = None
 fetch_error: Optional[str] = None
-
-
-def ensure_cache_folder():
-    """Ensure the cache folder exists"""
-    settings.cache_folder.mkdir(parents=True, exist_ok=True)
-
-
-def transform_to_optimized(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Transform upstream data to optimized format.
-
-    Optimizations:
-    - Remove redundant data (raw.hosts, summaries, raw.metadata, raw.jobs.gpu_jobs)
-    - Convert slot arrays to sparse format
-    - Embed hardwareGroup directly in hostDetails
-    """
-    # Build hostname -> hardwareGroup mapping
-    hostname_to_group = {}
-    for group_name, hostnames in data.get('hardwareGroups', {}).items():
-        for hostname in hostnames:
-            hostname_to_group[hostname] = group_name
-
-    # Transform hostDetails
-    optimized_host_details = []
-    for host in data.get('hostDetails', []):
-        # Convert slot arrays to sparse format (only non-empty slots)
-        cpu_slots_sparse = {
-            str(i): user
-            for i, user in enumerate(host.get('cpuSlots', []))
-            if user
-        }
-        gpu_slots_sparse = {
-            str(i): user
-            for i, user in enumerate(host.get('gpuSlots', []))
-            if user
-        }
-
-        optimized_host = {
-            **host,
-            'cpuSlots': cpu_slots_sparse,
-            'gpuSlots': gpu_slots_sparse,
-            'hardwareGroup': hostname_to_group.get(host['hostname'], 'Unknown')
-        }
-        optimized_host_details.append(optimized_host)
-
-    # Build optimized structure (removed: hosts, cpus, gpus, hardwareGroups, raw.hosts, raw.metadata, raw.jobs.gpu_jobs)
-    return {
-        'hostDetails': optimized_host_details,
-        'activeUsers': data.get('activeUsers'),
-        'userJobStats': data.get('userJobStats'),
-        'motd': data.get('motd'),
-        'fetchedAt': data.get('fetchedAt'),
-        'raw': {
-            'jobs': {
-                'all': data.get('raw', {}).get('jobs', {}).get('all', [])
-            },
-            'gpu_attribution': data.get('raw', {}).get('gpu_attribution', [])
-        }
-    }
 
 
 def get_latest_cached_file() -> Optional[Path]:
@@ -191,53 +124,19 @@ def load_cached_data() -> Optional[Dict[str, Any]]:
         return None
 
 
-def save_to_cache(data: Dict[str, Any]) -> Path:
-    """Save optimized, gzipped data to cache with unix timestamp filename"""
-    ensure_cache_folder()
-
-    # Parse fetchedAt ISO timestamp and convert to unix timestamp
-    fetched_at = data.get("fetchedAt", "")
-    try:
-        dt = datetime.fromisoformat(fetched_at.replace("Z", "+00:00"))
-        timestamp = int(dt.timestamp())
-    except (ValueError, AttributeError):
-        # Fallback to current time if fetchedAt is missing or invalid
-        timestamp = int(datetime.now().timestamp())
-
-    # Transform to optimized format
-    optimized_data = transform_to_optimized(data)
-
-    # Save as gzipped JSON
-    filepath = settings.cache_folder / f"{timestamp}.json.gz"
-
-    with gzip.open(filepath, 'wt', encoding='utf-8') as f:
-        json.dump(optimized_data, f)
-
-    return filepath
-
-
-async def fetch_and_cache() -> Optional[Dict[str, Any]]:
+async def fetch_and_cache() -> Optional[Path]:
     """Fetch cluster status from upstream API and save to cache"""
     global last_fetch_time, fetch_error
 
-    try:
-        print(f"[{datetime.now().isoformat()}] Fetching cluster status from {settings.upstream_url}...")
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(settings.upstream_url)
-            response.raise_for_status()
+    result = await fetch_and_cache_async(settings)
 
-            data = response.json()
-            filepath = save_to_cache(data)
-            last_fetch_time = datetime.now()
-            fetch_error = None
+    if result is not None:
+        last_fetch_time = datetime.now()
+        fetch_error = None
+    else:
+        fetch_error = "Fetch failed"
 
-            print(f"[{datetime.now().isoformat()}] Saved to {filepath}")
-            return data
-
-    except Exception as e:
-        fetch_error = str(e)
-        print(f"[{datetime.now().isoformat()}] Error fetching cluster status: {e}")
-        return None
+    return result
 
 
 async def periodic_fetch():
