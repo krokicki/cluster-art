@@ -917,6 +917,10 @@
                     <div class="help-key">SHIFT+5</div>
                     <div class="help-desc">Hilbert Curve</div>
                 </div>
+                <div class="help-item">
+                    <div class="help-key">SHIFT+6</div>
+                    <div class="help-desc">Spiral</div>
+                </div>
             </div>
 
             <div class="help-section">
@@ -1628,6 +1632,69 @@
                     const { x, y } = this.hilbertD2xy(n, idx);
                     resource.x = x;
                     resource.y = y;
+                });
+            }
+        }
+
+        // Spiral layout - center outward, ordered by utilization
+        class SpiralLayout extends LayoutStrategy {
+            getName() {
+                return 'SPIRAL';
+            }
+
+            layout(resources, gridWidth, gridHeight) {
+                if (resources.length === 0) return;
+
+                // Sort by utilization (highest first - hot center)
+                const sortedResources = [...resources].sort((a, b) => {
+                    const utilA = a.user ? (a.utilization || 100) : 0;
+                    const utilB = b.user ? (b.utilization || 100) : 0;
+                    return utilB - utilA;
+                });
+
+                // Generate spiral coordinates
+                const size = Math.ceil(Math.sqrt(resources.length));
+                const centerX = Math.floor(size / 2);
+                const centerY = Math.floor(size / 2);
+
+                // Spiral outward from center
+                let x = centerX, y = centerY;
+                let dx = 1, dy = 0;
+                let segmentLength = 1;
+                let segmentPassed = 0;
+                let turnsMade = 0;
+
+                sortedResources.forEach((resource, idx) => {
+                    resource.x = x;
+                    resource.y = y;
+
+                    // Move to next position
+                    x += dx;
+                    y += dy;
+                    segmentPassed++;
+
+                    // Check if we need to turn
+                    if (segmentPassed === segmentLength) {
+                        segmentPassed = 0;
+                        // Rotate direction 90 degrees counter-clockwise
+                        [dx, dy] = [-dy, dx];
+                        turnsMade++;
+                        // Increase segment length every 2 turns
+                        if (turnsMade % 2 === 0) {
+                            segmentLength++;
+                        }
+                    }
+                });
+
+                // Normalize coordinates to start from 0
+                let minX = Infinity, minY = Infinity;
+                sortedResources.forEach(r => {
+                    minX = Math.min(minX, r.x);
+                    minY = Math.min(minY, r.y);
+                });
+                sortedResources.forEach(r => {
+                    r.x -= minX;
+                    r.y -= minY;
                 });
             }
         }
@@ -2472,7 +2539,8 @@
                 new RackTopologyLayout(),
                 new HardwareGroupLayout(),
                 new UserTerritoriesLayout(),
-                new HilbertCurveLayout()
+                new HilbertCurveLayout(),
+                new SpiralLayout()
             ];
         }
 
