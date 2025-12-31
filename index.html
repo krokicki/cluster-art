@@ -2861,6 +2861,7 @@
             updateCurrentModeDisplay();
             updateCurrentLayoutDisplay();
             populateLegend();
+            refreshTooltip();
         }
 
         async function preloadAdjacentSnapshots(centerIndex) {
@@ -3327,6 +3328,7 @@
                 updateCurrentModeDisplay();
                 updateCurrentLayoutDisplay();
                 populateLegend();
+                refreshTooltip();
 
                 console.log(`[${new Date().toISOString()}] Cluster data refreshed successfully`);
             } else {
@@ -3355,6 +3357,8 @@
         // Tooltip handling
         const tooltip = document.getElementById('tooltip');
         let currentResource = null;
+        let hoverGridX = null;
+        let hoverGridY = null;
 
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
@@ -3363,11 +3367,11 @@
 
             // Calculate grid position using effective pixel size
             const effectivePixelSize = PIXEL_SIZE * zoomLevel;
-            const gridX = Math.floor(mouseX / effectivePixelSize);
-            const gridY = Math.floor(mouseY / effectivePixelSize);
+            hoverGridX = Math.floor(mouseX / effectivePixelSize);
+            hoverGridY = Math.floor(mouseY / effectivePixelSize);
 
             // Find resource at this position
-            const resource = resources.find(r => r.x === gridX && r.y === gridY);
+            const resource = resources.find(r => r.x === hoverGridX && r.y === hoverGridY);
 
             if (resource) {
                 currentResource = resource;
@@ -3378,6 +3382,8 @@
         });
 
         canvas.addEventListener('mouseleave', () => {
+            hoverGridX = null;
+            hoverGridY = null;
             hideTooltip();
         });
 
@@ -3536,6 +3542,19 @@
             currentResource = null;
             tooltip.classList.remove('visible');
             draw(); // Redraw to remove hover border
+        }
+
+        function refreshTooltip() {
+            // Update tooltip if cursor is hovering over the canvas
+            if (hoverGridX !== null && hoverGridY !== null) {
+                const resource = resources.find(r => r.x === hoverGridX && r.y === hoverGridY);
+                if (resource) {
+                    currentResource = resource;
+                    showTooltip(resource);
+                } else {
+                    hideTooltip();
+                }
+            }
         }
 
         // Update current mode display
