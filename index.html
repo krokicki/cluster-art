@@ -957,7 +957,6 @@
             <div id="time-travel-controls">
                 <button id="time-travel-prev" class="time-travel-button" title="Previous snapshot">|&lt;</button>
                 <button id="time-travel-play" class="time-travel-button" title="Play/Pause">&#9654;</button>
-                <button id="time-travel-loop" class="time-travel-button" title="Loop playback" style="font-size: 16px;">&#8635;</button>
                 <button id="time-travel-next" class="time-travel-button" title="Next snapshot">&gt;|</button>
                 <select id="time-travel-speed">
                     <option value="100">10e2x</option>
@@ -1028,7 +1027,7 @@
         let timeTravelMode = false;
         let timeTravelTimestamp = null;
         let timeTravelPlaying = false;
-        let timeTravelLoop = false;
+        let timeTravelPlayOnLoad = false;
         let timeTravelSpeed = 1000;
         let timeTravelExpanded = false;
         let availableTimepoints = null;
@@ -1049,13 +1048,18 @@
                 ly: currentLayoutMode,
                 l: legendExpanded ? 1 : 0,
                 h: helpExpanded ? 1 : 0,
-                te: timeTravelExpanded ? 1 : 0
+                te: timeTravelExpanded ? 1 : 0,
+                ts: timeTravelSpeed
             };
 
             // Only add time travel state if not in LIVE mode
             if (timeTravelMode && timeTravelTimestamp) {
                 state.tt = timeTravelTimestamp;
-                state.ts = timeTravelSpeed;
+            }
+
+            // Add playing state
+            if (timeTravelPlaying) {
+                state.tp = 1;
             }
 
             const hash = Object.entries(state)
@@ -1086,7 +1090,8 @@
                 timeTravelTimestamp = parseInt(params.get('tt'));
                 timeTravelMode = true;
             }
-            if (params.has('ts')) timeTravelSpeed = parseFloat(params.get('ts'));
+            if (params.has('ts')) timeTravelSpeed = parseInt(params.get('ts'));
+            if (params.has('tp')) timeTravelPlayOnLoad = params.get('tp') === '1';
 
             return true;
         }
@@ -2572,6 +2577,7 @@
             document.getElementById('time-travel-play').innerHTML = '\u275A\u275A';
             document.getElementById('time-travel-play').classList.add('active');
 
+            saveStateToURL();
             playbackLoop();
         }
 
@@ -2585,6 +2591,8 @@
 
             document.getElementById('time-travel-play').innerHTML = '&#9654;';
             document.getElementById('time-travel-play').classList.remove('active');
+
+            saveStateToURL();
         }
 
         function playbackLoop() {
@@ -2616,21 +2624,14 @@
 
                     preloadAdjacentSnapshots(currentTimepointIndex);
                 } else {
-                    // Reached end
-                    if (timeTravelLoop) {
-                        // Loop back to beginning
-                        currentTimepointIndex = 0;
-                        const firstTimestamp = availableTimepoints.timestamps[0];
-                        document.getElementById('time-travel-slider').value = 0;
-                        timeTravelTimestamp = firstTimestamp;
-                        loadClusterDataAt(firstTimestamp);
-                        updateTimeTravelDisplay();
-                        preloadAdjacentSnapshots(0);
-                    } else {
-                        // Switch to LIVE mode
-                        returnToLive();
-                        return;
-                    }
+                    // Reached end - loop back to beginning
+                    currentTimepointIndex = 0;
+                    const firstTimestamp = availableTimepoints.timestamps[0];
+                    document.getElementById('time-travel-slider').value = 0;
+                    timeTravelTimestamp = firstTimestamp;
+                    loadClusterDataAt(firstTimestamp);
+                    updateTimeTravelDisplay();
+                    preloadAdjacentSnapshots(0);
                 }
             }
 
@@ -2927,6 +2928,9 @@
                 // Initialize time travel panel
                 await initTimeTravel();
 
+                // Apply speed from URL
+                document.getElementById('time-travel-speed').value = timeTravelSpeed;
+
                 // Apply time travel state from URL if present
                 if (timeTravelTimestamp && availableTimepoints?.timestamps) {
                     const index = availableTimepoints.timestamps.indexOf(timeTravelTimestamp);
@@ -2940,6 +2944,14 @@
                 // Apply time travel panel expansion state
                 if (timeTravelExpanded) {
                     document.getElementById('time-travel').classList.add('expanded');
+                }
+
+                // Start playback if was playing when URL was saved
+                if (timeTravelPlayOnLoad && availableTimepoints?.timestamps?.length) {
+                    if (!timeTravelMode) {
+                        enterTimeTravelMode(availableTimepoints.timestamps[0], 0);
+                    }
+                    startPlayback();
                 }
 
                 // Save initial state to URL
@@ -3312,12 +3324,6 @@
                     }
                     startPlayback();
                 }
-            });
-
-            // Loop toggle
-            document.getElementById('time-travel-loop').addEventListener('click', () => {
-                timeTravelLoop = !timeTravelLoop;
-                document.getElementById('time-travel-loop').classList.toggle('active', timeTravelLoop);
             });
 
             // Prev button
