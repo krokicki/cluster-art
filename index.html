@@ -2735,7 +2735,7 @@
             }
         }
 
-        async function changeWindowStart(newStartTimestamp, skipEnterTimeTravel = false) {
+        async function changeWindowStart(newStartTimestamp, skipEnterTimeTravel = false, sliderPosition = 'start') {
             windowStartDate = newStartTimestamp;
 
             // Stop playback if active
@@ -2750,12 +2750,18 @@
 
             availableTimepoints = await response.json();
 
-            // Update slider - reset to beginning of new window
+            // Update slider
             const slider = document.getElementById('time-travel-slider');
             slider.min = 0;
             slider.max = Math.max(0, availableTimepoints.timestamps.length - 1);
-            slider.value = 0;
-            currentTimepointIndex = 0;
+
+            if (sliderPosition === 'end') {
+                slider.value = slider.max;
+                currentTimepointIndex = availableTimepoints.timestamps.length - 1;
+            } else {
+                slider.value = 0;
+                currentTimepointIndex = 0;
+            }
 
             updateDateDisplay();
 
@@ -2962,7 +2968,7 @@
             timeTravelMode = false;
             timeTravelTimestamp = null;
 
-            // Reset window to last 7 days
+            // Reset window to last 7 days (ending now)
             const newStart = Math.floor(Date.now() / 1000) - (7 * 86400);
             windowStartDate = newStart;
 
@@ -2971,15 +2977,8 @@
                 datePicker.setDate(new Date(windowStartDate * 1000), false);
             }
 
-            // Refresh timepoints for new window (skip entering time travel mode)
-            await changeWindowStart(newStart, true);
-
-            // Reset slider to end (LIVE = latest)
-            if (availableTimepoints?.timestamps) {
-                const slider = document.getElementById('time-travel-slider');
-                slider.value = slider.max;
-                currentTimepointIndex = availableTimepoints.timestamps.length - 1;
-            }
+            // Refresh timepoints for new window (skip time travel, slider at end for LIVE)
+            await changeWindowStart(newStart, true, 'end');
 
             document.getElementById('time-travel-live').classList.add('active');
             updateTimeTravelDisplay();
@@ -2994,6 +2993,7 @@
                 updateCurrentModeDisplay();
                 updateCurrentLayoutDisplay();
                 populateLegend();
+                refreshTooltip();
             }
         }
 
