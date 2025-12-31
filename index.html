@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cluster Resource Visualization</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <style>
         * {
             margin: 0;
@@ -671,10 +673,9 @@
         }
 
         #time-travel-display {
-            padding: 12px 16px;
-            border-top: 2px solid #00ff00;
             text-align: center;
             font-size: 10px;
+            margin-top: 6px;
         }
 
         #time-travel-timestamp {
@@ -715,14 +716,6 @@
             background: #00ff00;
             cursor: pointer;
             border: 2px solid #ffff00;
-        }
-
-        #time-travel-range {
-            display: flex;
-            justify-content: space-between;
-            font-size: 7px;
-            color: #666;
-            margin-top: 4px;
         }
 
         #time-travel-controls {
@@ -799,6 +792,112 @@
 
         #time-travel-speed option {
             background: #1a1a2e;
+        }
+
+        /* Date picker row */
+        #time-travel-date-row {
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 8px;
+        }
+
+        .time-travel-label {
+            color: #ffff00;
+        }
+
+        .time-travel-arrow {
+            color: #666;
+        }
+
+        #time-travel-start-date {
+            background: #0a0a1a;
+            border: 2px solid #00ff00;
+            color: #00ffff;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            padding: 4px 8px;
+            cursor: pointer;
+            width: 80px;
+            text-align: center;
+        }
+
+        #time-travel-start-date:hover {
+            background: #00ff00;
+            color: #1a1a2e;
+        }
+
+        #time-travel-end-date {
+            color: #00ffff;
+        }
+
+        /* Flatpickr retro theme overrides */
+        .flatpickr-calendar {
+            background: #1a1a2e !important;
+            border: 4px solid #00ff00 !important;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8) !important;
+            font-family: 'Press Start 2P', monospace !important;
+            font-size: 8px !important;
+        }
+
+        .flatpickr-day {
+            color: #00ff00 !important;
+            border-radius: 0 !important;
+        }
+
+        .flatpickr-day:hover {
+            background: #00ff00 !important;
+            color: #1a1a2e !important;
+        }
+
+        .flatpickr-day.selected {
+            background: #ffff00 !important;
+            color: #1a1a2e !important;
+            border-color: #ffff00 !important;
+        }
+
+        .flatpickr-day.today {
+            border-color: #00ffff !important;
+        }
+
+        .flatpickr-day.flatpickr-disabled {
+            color: #333 !important;
+        }
+
+        .flatpickr-months, .flatpickr-weekdays {
+            background: #0a0a1a !important;
+        }
+
+        .flatpickr-month, .flatpickr-current-month {
+            color: #ffff00 !important;
+        }
+
+        .flatpickr-current-month .flatpickr-monthDropdown-months {
+            background: #1a1a2e !important;
+            color: #00ff00 !important;
+        }
+
+        .flatpickr-weekday {
+            color: #00ffff !important;
+            font-size: 8px !important;
+        }
+
+        .flatpickr-prev-month, .flatpickr-next-month {
+            fill: #00ff00 !important;
+        }
+
+        .flatpickr-prev-month:hover, .flatpickr-next-month:hover {
+            fill: #ffff00 !important;
+        }
+
+        .numInputWrapper {
+            background: #1a1a2e !important;
+        }
+
+        .numInput {
+            color: #00ff00 !important;
+            background: #1a1a2e !important;
         }
     </style>
 </head>
@@ -946,13 +1045,15 @@
     <div id="time-travel">
         <div id="time-travel-title">TIME TRAVEL</div>
         <div id="time-travel-content">
-            <div id="time-travel-display"><span id="time-travel-timestamp">LIVE</span></div>
+            <div id="time-travel-date-row">
+                <span class="time-travel-label">FROM:</span>
+                <input type="text" id="time-travel-start-date" readonly>
+                <span class="time-travel-label time-travel-arrow">→</span>
+                <span id="time-travel-end-date"></span>
+            </div>
             <div id="time-travel-slider-container">
                 <input type="range" id="time-travel-slider" min="0" max="100" value="100">
-                <div id="time-travel-range">
-                    <span id="time-travel-first"></span>
-                    <span id="time-travel-last"></span>
-                </div>
+                <div id="time-travel-display"><span id="time-travel-timestamp">LIVE</span></div>
             </div>
             <div id="time-travel-controls">
                 <button id="time-travel-prev" class="time-travel-button" title="Previous snapshot">|&lt;</button>
@@ -1036,6 +1137,11 @@
         let playbackAnimationId = null;
         let lastPlaybackTime = 0;
 
+        // Date picker state
+        let windowStartDate = null;  // Unix timestamp for window start
+        let datePicker = null;       // Flatpickr instance
+        let availableRange = null;   // {earliest, latest} from backend
+
         // URL State Management
         function saveStateToURL() {
             const state = {
@@ -1060,6 +1166,11 @@
             // Add playing state
             if (timeTravelPlaying) {
                 state.tp = 1;
+            }
+
+            // Add window start date if set
+            if (windowStartDate) {
+                state.ws = windowStartDate;
             }
 
             const hash = Object.entries(state)
@@ -1092,6 +1203,7 @@
             }
             if (params.has('ts')) timeTravelSpeed = parseInt(params.get('ts'));
             if (params.has('tp')) timeTravelPlayOnLoad = params.get('tp') === '1';
+            if (params.has('ws')) windowStartDate = parseInt(params.get('ws'));
 
             return true;
         }
@@ -2461,13 +2573,27 @@
 
         async function initTimeTravel() {
             try {
-                const response = await fetch('/api/timepoints');
+                // Default window start to 7 days ago if not set
+                if (!windowStartDate) {
+                    windowStartDate = Math.floor(Date.now() / 1000) - (7 * 86400);
+                }
+
+                // Fetch timepoints for the 7-day window
+                const response = await fetch(`/api/timepoints?start=${windowStartDate}&days=7`);
                 if (!response.ok) {
                     console.error('Failed to fetch timepoints:', response.status);
                     return;
                 }
                 availableTimepoints = await response.json();
+                availableRange = availableTimepoints.available_range;
                 console.log('Time travel initialized with', availableTimepoints.count, 'timepoints');
+                if (availableRange) {
+                    console.log('Available range:', new Date(availableRange.earliest * 1000),
+                                'to', new Date(availableRange.latest * 1000));
+                }
+
+                // Initialize date picker
+                initDatePicker();
 
                 if (availableTimepoints.timestamps && availableTimepoints.timestamps.length > 0) {
                     const slider = document.getElementById('time-travel-slider');
@@ -2476,19 +2602,84 @@
                     slider.value = slider.max;
                     currentTimepointIndex = availableTimepoints.timestamps.length - 1;
 
-                    // Update range labels
-                    document.getElementById('time-travel-first').textContent =
-                        formatTimestamp(availableTimepoints.first);
-                    document.getElementById('time-travel-last').textContent =
-                        formatTimestamp(availableTimepoints.last);
-
                     updateTimeTravelDisplay();
                 } else {
-                    console.log('No timepoints available for time travel');
+                    console.log('No timepoints available for time travel in this window');
                 }
             } catch (error) {
                 console.error('Failed to initialize time travel:', error);
             }
+        }
+
+        function initDatePicker() {
+            const startDateInput = document.getElementById('time-travel-start-date');
+            const minDate = availableRange ? new Date(availableRange.earliest * 1000) : null;
+
+            datePicker = flatpickr(startDateInput, {
+                dateFormat: 'M j',
+                defaultDate: new Date(windowStartDate * 1000),
+                minDate: minDate,
+                maxDate: new Date(),
+                disableMobile: true,
+                onChange: function(selectedDates) {
+                    if (selectedDates.length > 0) {
+                        const newStart = Math.floor(selectedDates[0].getTime() / 1000);
+                        changeWindowStart(newStart);
+                    }
+                }
+            });
+
+            updateDateDisplay();
+        }
+
+        function updateDateDisplay() {
+            const startInput = document.getElementById('time-travel-start-date');
+            const endSpan = document.getElementById('time-travel-end-date');
+
+            if (windowStartDate) {
+                const startDate = new Date(windowStartDate * 1000);
+                const endDate = new Date((windowStartDate + 7 * 86400) * 1000);
+
+                startInput.value = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                endSpan.textContent = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+        }
+
+        async function changeWindowStart(newStartTimestamp, skipEnterTimeTravel = false) {
+            windowStartDate = newStartTimestamp;
+
+            // Stop playback if active
+            stopPlayback();
+
+            // Fetch new timepoints for the window
+            const response = await fetch(`/api/timepoints?start=${windowStartDate}&days=7`);
+            if (!response.ok) {
+                console.error('Failed to fetch timepoints for new window');
+                return;
+            }
+
+            availableTimepoints = await response.json();
+
+            // Update slider - reset to beginning of new window
+            const slider = document.getElementById('time-travel-slider');
+            slider.min = 0;
+            slider.max = Math.max(0, availableTimepoints.timestamps.length - 1);
+            slider.value = 0;
+            currentTimepointIndex = 0;
+
+            updateDateDisplay();
+
+            // Clear preloaded cache since window changed
+            preloadedSnapshots.clear();
+
+            // Load the first timestamp in new window (enter time travel mode)
+            // Skip if returning to LIVE mode
+            if (!skipEnterTimeTravel && availableTimepoints.timestamps.length > 0) {
+                const firstInWindow = availableTimepoints.timestamps[0];
+                enterTimeTravelMode(firstInWindow, 0);
+            }
+
+            saveStateToURL();
         }
 
         async function loadClusterDataAt(timestamp) {
@@ -2680,16 +2871,27 @@
             timeTravelMode = false;
             timeTravelTimestamp = null;
 
-            document.getElementById('time-travel-live').classList.add('active');
-            updateTimeTravelDisplay();
+            // Reset window to last 7 days
+            const newStart = Math.floor(Date.now() / 1000) - (7 * 86400);
+            windowStartDate = newStart;
 
-            // Reset slider to end
+            // Update date picker
+            if (datePicker) {
+                datePicker.setDate(new Date(windowStartDate * 1000), false);
+            }
+
+            // Refresh timepoints for new window (skip entering time travel mode)
+            await changeWindowStart(newStart, true);
+
+            // Reset slider to end (LIVE = latest)
             if (availableTimepoints?.timestamps) {
                 const slider = document.getElementById('time-travel-slider');
                 slider.value = slider.max;
                 currentTimepointIndex = availableTimepoints.timestamps.length - 1;
             }
 
+            document.getElementById('time-travel-live').classList.add('active');
+            updateTimeTravelDisplay();
             saveStateToURL();
 
             // Resume with fresh data

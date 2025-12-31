@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings
@@ -399,18 +399,47 @@ async def health():
 
 
 @app.get("/api/timepoints")
-async def get_timepoints():
-    """Return metadata about available cached timepoints"""
-    timestamps = get_all_cache_timestamps()
+async def get_timepoints(
+    start: Optional[int] = None,  # Unix timestamp for window start
+    days: int = Query(default=7, ge=1, le=365)  # Window size in days
+):
+    """Return metadata about available cached timepoints within a date range.
 
-    if not timestamps:
-        return {"first": None, "last": None, "count": 0, "timestamps": []}
+    Args:
+        start: Unix timestamp for window start. Defaults to (now - days).
+        days: Number of days in window. Defaults to 7, max 365.
+    """
+    all_timestamps = get_all_cache_timestamps()
+
+    if not all_timestamps:
+        return {
+            "first": None, "last": None, "count": 0, "timestamps": [],
+            "window_start": None, "window_end": None, "available_range": None
+        }
+
+    # Calculate window bounds
+    now = int(datetime.now().timestamp())
+    window_seconds = days * 86400
+
+    if start is None:
+        start = now - window_seconds
+
+    end = start + window_seconds
+
+    # Filter timestamps to window
+    filtered = [ts for ts in all_timestamps if start <= ts <= end]
 
     return {
-        "first": timestamps[0],
-        "last": timestamps[-1],
-        "count": len(timestamps),
-        "timestamps": timestamps
+        "first": filtered[0] if filtered else None,
+        "last": filtered[-1] if filtered else None,
+        "count": len(filtered),
+        "timestamps": filtered,
+        "window_start": start,
+        "window_end": end,
+        "available_range": {
+            "earliest": all_timestamps[0],
+            "latest": all_timestamps[-1]
+        }
     }
 
 
