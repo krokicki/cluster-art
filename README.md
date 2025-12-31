@@ -105,6 +105,35 @@ CLUSTER_FETCH_INTERVAL=60
 CLUSTER_CACHE_FOLDER=/var/cache/cluster-viz
 ```
 
+## Running the Cache Fetcher via Cron
+
+The cache fetcher can run independently of the web server, useful for populating the cache on a schedule.
+
+### Standalone Fetcher
+
+```bash
+pixi run fetch
+```
+
+### Crontab Configuration
+
+To fetch every 2 minutes (matching the default interval):
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line (adjust path as needed):
+*/2 * * * * cd /path/to/cluster-art && pixi run fetch >> /var/log/cluster-fetch.log 2>&1
+```
+
+When using cron, disable the server's background fetcher by setting a very long interval:
+
+```bash
+# .env
+CLUSTER_FETCH_INTERVAL=999999
+```
+
 ## Requirements
 
 - [Pixi](https://pixi.sh) package manager

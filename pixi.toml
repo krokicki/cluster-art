@@ -7,6 +7,7 @@ version = "0.1.0"
 
 [tasks]
 serve = "python -m uvicorn app:app --host 0.0.0.0 --port 8000"
+fetch = "python fetch_cache.py"
 
 [dependencies]
 python = ">=3.8"

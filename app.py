@@ -19,11 +19,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from fetch_cache import (
-    Settings,
-    get_settings,
-    fetch_and_cache_async,
-)
+from fetch_cache import Settings, get_settings, fetch_and_cache_async, get_cache_path_for_timestamp
 
 settings = get_settings()
 
@@ -32,30 +28,31 @@ last_fetch_time: Optional[datetime] = None
 fetch_error: Optional[str] = None
 
 
+def get_timestamp_from_path(p: Path) -> int:
+    """Extract unix timestamp from cache file path"""
+    stem = p.stem
+    if stem.endswith('.json'):  # Handle .json.gz case
+        stem = stem[:-5]
+    try:
+        return int(stem)
+    except ValueError:
+        return 0
+
+
 def get_latest_cached_file() -> Optional[Path]:
     """Get the most recent cached JSON file (gzipped or plain)"""
     if not settings.cache_folder.exists():
         return None
 
-    # Check for gzipped files first, then plain JSON for backwards compatibility
-    gz_files = list(settings.cache_folder.glob("*.json.gz"))
-    json_files = list(settings.cache_folder.glob("*.json"))
+    # Check for gzipped files first (hierarchical and flat), then plain JSON for backwards compatibility
+    gz_files = list(settings.cache_folder.glob("**/*.json.gz"))
+    json_files = list(settings.cache_folder.glob("**/*.json"))
 
     all_files = gz_files + json_files
     if not all_files:
         return None
 
-    # Extract timestamp from filename (handles both .json and .json.gz)
-    def get_timestamp(p: Path) -> int:
-        stem = p.stem
-        if stem.endswith('.json'):  # Handle .json.gz case
-            stem = stem[:-5]
-        try:
-            return int(stem)
-        except ValueError:
-            return 0
-
-    return max(all_files, key=get_timestamp)
+    return max(all_files, key=get_timestamp_from_path)
 
 
 def get_all_cache_timestamps() -> list[int]:
@@ -63,20 +60,12 @@ def get_all_cache_timestamps() -> list[int]:
     if not settings.cache_folder.exists():
         return []
 
-    gz_files = list(settings.cache_folder.glob("*.json.gz"))
-    json_files = list(settings.cache_folder.glob("*.json"))
+    # Search hierarchical and flat structure
+    gz_files = list(settings.cache_folder.glob("**/*.json.gz"))
+    json_files = list(settings.cache_folder.glob("**/*.json"))
     all_files = gz_files + json_files
 
-    def get_timestamp(p: Path) -> int:
-        stem = p.stem
-        if stem.endswith('.json'):
-            stem = stem[:-5]
-        try:
-            return int(stem)
-        except ValueError:
-            return 0
-
-    timestamps = [get_timestamp(f) for f in all_files if get_timestamp(f) > 0]
+    timestamps = [get_timestamp_from_path(f) for f in all_files if get_timestamp_from_path(f) > 0]
     return sorted(timestamps)
 
 
@@ -94,14 +83,19 @@ def get_cache_file_by_timestamp(timestamp: int) -> Optional[Path]:
         closest = min(timestamps, key=lambda t: abs(t - timestamp))
         target_ts = closest
 
-    # Try gzipped first, then plain JSON
-    gz_path = settings.cache_folder / f"{target_ts}.json.gz"
+    # Try hierarchical path first (gzipped)
+    gz_path = get_cache_path_for_timestamp(target_ts, settings.cache_folder)
     if gz_path.exists():
         return gz_path
 
-    json_path = settings.cache_folder / f"{target_ts}.json"
-    if json_path.exists():
-        return json_path
+    # Fall back to flat structure for backwards compatibility
+    flat_gz_path = settings.cache_folder / f"{target_ts}.json.gz"
+    if flat_gz_path.exists():
+        return flat_gz_path
+
+    flat_json_path = settings.cache_folder / f"{target_ts}.json"
+    if flat_json_path.exists():
+        return flat_json_path
 
     return None
 
