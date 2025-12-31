@@ -816,26 +816,6 @@
         <div id="help-title">HELP</div>
         <div id="help-content">
             <div class="help-section">
-                <div class="help-section-title">NAVIGATION</div>
-                <div class="help-item">
-                    <div class="help-key">CLICK+DRAG</div>
-                    <div class="help-desc">Move canvas</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-key">CLICK</div>
-                    <div class="help-desc">View resource details</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-key">ARROWS</div>
-                    <div class="help-desc">Navigate in modal</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-key">ESC</div>
-                    <div class="help-desc">Close modal</div>
-                </div>
-            </div>
-
-            <div class="help-section">
                 <div class="help-section-title">ZOOM</div>
                 <div class="help-item">
                     <div class="help-key">+ / -</div>
@@ -844,14 +824,6 @@
                 <div class="help-item">
                     <div class="help-key">CLICK %</div>
                     <div class="help-desc">Reset to 100%</div>
-                </div>
-            </div>
-
-            <div class="help-section">
-                <div class="help-section-title">RESIZE</div>
-                <div class="help-item">
-                    <div class="help-key">CORNERS</div>
-                    <div class="help-desc">Drag to resize</div>
                 </div>
             </div>
 
@@ -944,6 +916,10 @@
                 <div class="help-item">
                     <div class="help-key">T</div>
                     <div class="help-desc">Toggle time travel</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">SPACE</div>
+                    <div class="help-desc">Play/pause</div>
                 </div>
                 <div class="help-item">
                     <div class="help-key">?</div>
@@ -3412,6 +3388,21 @@
             // T to toggle time travel
             if (e.key === 't' || e.key === 'T') {
                 toggleTimeTravel();
+            }
+
+            // SPACE to play/pause time travel
+            if (e.key === ' ') {
+                e.preventDefault();
+                if (availableTimepoints?.timestamps?.length) {
+                    if (timeTravelPlaying) {
+                        stopPlayback();
+                    } else {
+                        if (!timeTravelMode) {
+                            enterTimeTravelMode(availableTimepoints.timestamps[0], 0);
+                        }
+                        startPlayback();
+                    }
+                }
             }
 
             // Number keys: Shift+N for layouts, N for color modes
