@@ -6,33 +6,54 @@ Artistic HPC cluster visualization with a vintage video game aesthetic. Prioriti
 
 ```bash
 pixi run serve   # Starts server at http://localhost:8000
+pixi run fetch   # Manual fetch (for cron jobs)
 ```
 
 ## Project Structure
 
 ```
 cluster-art/
-├── app.py         # FastAPI backend
-├── index.html     # Frontend SPA with all CSS/JS
-├── pixi.toml      # Project config and dependencies
-├── .env           # Local config overrides (optional, gitignored)
-├── cache/         # Cached gzipped JSON files (gitignored)
-│   └── <unix_timestamp>.json.gz
-└── CLAUDE.md      # This file
+├── cluster_art/           # Python package
+│   ├── __init__.py        # Package marker
+│   ├── app.py             # FastAPI backend
+│   ├── fetch_cache.py     # Data fetching, caching, and settings
+│   └── migrate_cache.py   # Cache migration utility (flat → hierarchical)
+├── static/                # Frontend assets
+│   ├── css/
+│   │   └── styles.css     # Retro CRT styling
+│   └── js/
+│       ├── main.js        # Application entry point
+│       ├── models.js      # Resource class
+│       ├── config.js      # Constants and palettes
+│       ├── layouts.js     # 9 layout strategies
+│       ├── colors.js      # 9 color strategies
+│       ├── state.js       # Global state management
+│       └── timetravel.js  # Historical playback
+├── schemas/               # JSON schema documentation
+│   ├── original.schema.json
+│   └── optimized.schema.json
+├── cache/                 # Cached gzipped JSON files (gitignored)
+│   └── YYYYMM/DD/<timestamp>.json.gz
+├── index.html             # Frontend SPA shell
+├── pixi.toml              # Project config and dependencies
+├── .env                   # Local config overrides (optional, gitignored)
+└── CLAUDE.md              # This file
 ```
 
 ## Architecture Overview
 
 ```
-Browser (index.html)          FastAPI (app.py)           Upstream
-┌─────────────────┐          ┌──────────────────┐       ┌─────────────┐
-│ Canvas 2D API   │◄────────►│ /api/cluster-    │◄─────►│ cluster-    │
-│ 9 color modes   │  JSON    │ status (cached)  │ every │ status.int. │
-│ Pan/zoom/modal  │          │                  │ 2min  │ janelia.org │
-└─────────────────┘          └──────────────────┘       └─────────────┘
+Browser                           FastAPI (cluster_art/)      Upstream
+┌───────────────────────┐        ┌──────────────────┐       ┌─────────────┐
+│ Canvas 2D API         │◄──────►│ /api/cluster-    │◄─────►│ cluster-    │
+│ 9 color modes         │  JSON  │ status (cached)  │ every │ status.int. │
+│ 9 layout modes        │        │                  │ 2min  │ janelia.org │
+│ Pan/zoom/time-travel  │        └──────────────────┘       └─────────────┘
+└───────────────────────┘
+     static/js modules
 ```
 
-## Backend (app.py)
+## Backend (cluster_art/)
 
 - **Framework**: FastAPI with Uvicorn
 - **Endpoints**:
@@ -40,7 +61,7 @@ Browser (index.html)          FastAPI (app.py)           Upstream
   - `GET /api/cluster-status` - Returns latest cached file (fetches if none exists)
   - `GET /api/cluster-status/{timestamp}` - Returns cached file at or nearest to given unix timestamp
   - `GET /api/health` - Health check with cache info
-  - `GET /api/timepoints` - Returns `{first, last, count, timestamps[]}` for all cached files
+  - `GET /api/timepoints` - Returns `{first, last, count, timestamps[]}` for all cached files within optional date window
 - **Background task**: Fetches upstream data periodically, optimizes and saves to disk
 - **File caching**: Each fetch transformed, gzipped, and saved as `<timestamp>.json.gz`
 - **Gzip serving**: Files served with `Content-Encoding: gzip` for automatic browser decompression
@@ -66,52 +87,90 @@ CLUSTER_CACHE_FOLDER=/var/cache/cluster-viz
 ### Cache Files
 
 - Stored in `cache/` folder (configurable)
-- Filename format: `<unix_timestamp>.json.gz` (timestamp from `fetchedAt` field)
+- **Hierarchical structure**: `YYYYMM/DD/<unix_timestamp>.json.gz`
+- Backwards compatible with legacy flat structure (`<timestamp>.json.gz`)
 - Data is optimized before saving (redundant fields removed, slots sparsified)
 - Latest file served on API request with `Content-Encoding: gzip`
 - On startup, uses existing cache if available
 
-## Frontend (index.html)
+### Cache Migration
 
-Single-file SPA with HTML, CSS, and JavaScript combined.
+To migrate from flat to hierarchical cache structure:
+```bash
+python -m cluster_art.migrate_cache           # Run migration
+python -m cluster_art.migrate_cache --dry-run # Preview only
+```
+
+## Frontend (static/)
+
+Modular ES6 JavaScript application with separated CSS.
+
+### Module Structure
+
+| Module | Purpose |
+|--------|---------|
+| `main.js` | Application entry, canvas rendering, event handling |
+| `models.js` | Resource class representing CPU/GPU slots |
+| `config.js` | Constants, color palettes, configuration |
+| `layouts.js` | 9 layout strategy implementations |
+| `colors.js` | 9 color strategy implementations |
+| `state.js` | Global state management with setters |
+| `timetravel.js` | Historical playback with date range picker |
 
 ### Key Classes
 
-**Resource** - Represents a single CPU or GPU slot:
+**Resource** (`models.js`) - Represents a single CPU or GPU slot:
 ```javascript
 class Resource {
   hostname, type, index, user, x, y, gpuType, hardwareGroup,
   utilization, status, load, jobId, jobName
+
+  get isIdle()  // true if user is null or empty
+  get row()     // extracts prefix like "h04" from "h04u08"
 }
 ```
 
-**Layout Strategies** - Calculate grid positions (Shift+N to switch):
-| Key | Strategy               | Description                      |
-|-----|------------------------|----------------------------------|
+### Layout Strategies (`layouts.js`)
+
+9 topology modes (Shift+N to switch):
+
+| Key | Strategy | Description |
+|-----|----------|-------------|
 | Shift+1 | HostnameHierarchyLayout | Linear layout grouped by hostname (default) |
 | Shift+2 | RackTopologyLayout | Physical rack positions from hostname parsing |
+| Shift+3 | HardwareGroupLayout | Clusters hosts by hardware type |
+| Shift+4 | UserTerritoriesLayout | Treemap-style with rectangular regions per user |
+| Shift+5 | JobGroupingLayout | Groups slots by job_id as rectangular blocks |
+| Shift+6 | IdleCompressionLayout | Active slots dense, idle compressed below |
+| Shift+7 | HilbertCurveLayout | Space-filling curve for better locality |
+| Shift+8 | SpiralLayout | Center spiral, sorted by utilization |
+| Shift+9 | RadialSunburstLayout | Circular with concentric rings by hardware |
 
-**Color Strategies** - 9 visualization modes:
-| Key | Strategy               | Description                      |
-|-----|------------------------|----------------------------------|
-| 1   | UserColorStrategy      | Distinct color per user          |
-| 2   | HostnameColorStrategy  | Random color per hostname        |
-| 3   | RowColorStrategy       | Color by row prefix (e.g. "h04") |
-| 4   | TypeColorStrategy      | Color by hardware group          |
-| 5   | GpuTypeColorStrategy   | Color by GPU type                |
-| 6   | UtilizationColorStrategy | Heat map by CPU utilization    |
-| 7   | StatusColorStrategy    | Green=in-use, gray=idle          |
-| 8   | HostStatusColorStrategy | Color by host status            |
-| 9   | MemoryLoadColorStrategy | Heat map by available memory    |
+### Color Strategies (`colors.js`)
 
-### Key Frontend Constants
+9 visualization modes:
+
+| Key | Strategy | Description |
+|-----|----------|-------------|
+| 1 | UserColorStrategy | Distinct color per user (30-color palette) |
+| 2 | HostnameColorStrategy | Hash-based color per hostname |
+| 3 | RowColorStrategy | Color by row prefix (e.g. "h04") |
+| 4 | TypeColorStrategy | Color by hardware group |
+| 5 | GpuTypeColorStrategy | Color by GPU type |
+| 6 | UtilizationColorStrategy | Heat map by CPU utilization |
+| 7 | StatusColorStrategy | Green=in-use, gray=idle |
+| 8 | HostStatusColorStrategy | Color by host status |
+| 9 | MemoryLoadColorStrategy | Heat map by available memory |
+
+### Key Frontend Constants (`config.js`)
 
 ```javascript
 const PIXEL_SIZE = 8;        // Base square size in pixels
-const MIN_ZOOM = 0.5;
+const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 3.0;
 const ZOOM_STEP = 0.1;
 const MIN_CANVAS_SIZE = 200;
+const PRELOAD_BUFFER = 3;    // Adjacent snapshots to preload
 // Default canvas: 1200x800
 ```
 
@@ -131,11 +190,13 @@ All UI state saved to URL hash:
 - Canvas position and size
 - Zoom level
 - Color mode (1-9)
+- Layout mode (1-9)
 - Panel visibility (help, legend)
+- Time travel state (`tt=timestamp`, `ts=speed`, `te=expanded`)
 
 ### Adding a New Color Strategy
 
-1. Create class implementing:
+1. Create class in `colors.js` implementing:
    ```javascript
    class MyColorStrategy {
      initialize(resources) { /* precompute colors */ }
@@ -144,12 +205,12 @@ All UI state saved to URL hash:
    }
    ```
 2. Add to `colorStrategies` array
-3. Update `COLOR_MODES` count
-4. Add keyboard handler in `handleKeyDown`
+3. Update `COLOR_MODES` count in `config.js`
+4. Add keyboard handler in `handleKeyDown` in `main.js`
 
 ### Adding a New Layout Strategy
 
-1. Create class extending `LayoutStrategy`:
+1. Create class in `layouts.js` extending `LayoutStrategy`:
    ```javascript
    class MyLayout extends LayoutStrategy {
      getName() { return 'MY LAYOUT'; }
@@ -159,7 +220,7 @@ All UI state saved to URL hash:
    }
    ```
 2. Add to `layoutStrategies` array in `initializeLayoutStrategies()`
-3. Update help panel with new Shift+N key
+3. Update help panel in `index.html` with new Shift+N key
 
 ## JSON Schema (Optimized)
 
@@ -291,15 +352,17 @@ JSON Schema files are available in `schemas/`:
 |--------|--------|
 | Drag canvas | Pan view |
 | Drag corners | Resize canvas |
-| +/- buttons or scroll | Zoom (0.5x - 3.0x) |
+| +/- buttons or scroll | Zoom (0.1x - 3.0x) |
 | Hover resource | Show tooltip |
 | Click resource | Open detail modal |
 | Arrow keys (in modal) | Navigate resources |
 | Keys 1-9 | Change color mode |
-| Shift+1-2 | Change layout mode |
+| Shift+1-9 | Change layout mode |
 | L | Toggle legend panel |
 | T | Toggle time travel panel |
+| P | Toggle all panels |
 | ? | Toggle help panel |
+| Space | Play/pause time travel playback |
 
 ## Time Travel Feature
 
@@ -308,10 +371,11 @@ View and playback historical cluster states. Located at top-center of the screen
 ### Controls
 
 - **Title bar**: Click to expand/collapse panel (or press 'T')
+- **Date range**: Flatpickr-based date picker to filter timestamps
 - **Slider**: Scrub through available timestamps
 - **|< / >|**: Step to previous/next snapshot
 - **Play button**: Start/stop playback animation
-- **Speed selector**: 100x, 1000x, or 10000x realtime
+- **Speed selector**: 100x to 10,000,000x realtime
 - **LIVE button**: Return to real-time mode (resumes auto-refresh)
 
 ### State Management
