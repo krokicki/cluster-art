@@ -933,6 +933,10 @@
                     <div class="help-key">SHIFT+9</div>
                     <div class="help-desc">Radial Sunburst</div>
                 </div>
+                <div class="help-item">
+                    <div class="help-key">SHIFT+0</div>
+                    <div class="help-desc">Idle Compression</div>
+                </div>
             </div>
 
             <div class="help-section">
@@ -1980,6 +1984,67 @@
             }
         }
 
+        // Idle compression layout - active slots dense at top, idle compressed below
+        class IdleCompressionLayout extends LayoutStrategy {
+            getName() {
+                return 'IDLE COMPRESSION';
+            }
+
+            layout(resources, gridWidth, gridHeight) {
+                // Separate active and idle slots
+                const activeSlots = [];
+                const idleSlots = [];
+
+                resources.forEach(resource => {
+                    if (resource.user && resource.user !== '') {
+                        activeSlots.push(resource);
+                    } else {
+                        idleSlots.push(resource);
+                    }
+                });
+
+                // Active slots: pack densely at top, filling full width
+                let x = 0;
+                let y = 0;
+
+                activeSlots.forEach(resource => {
+                    resource.x = x;
+                    resource.y = y;
+                    x++;
+                    if (x >= gridWidth) {
+                        x = 0;
+                        y++;
+                    }
+                });
+
+                // Calculate where active section ends
+                const activeEndY = (x > 0) ? y + 1 : y;
+
+                // Idle slots: compressed into fewer rows with gaps
+                // Use wider spacing to make them visually smaller/less prominent
+                const idleStartY = activeEndY + 1; // Gap between sections
+                const compressionFactor = 2; // Pack idle slots with gaps
+
+                let idleX = 0;
+                let idleY = idleStartY;
+                let idleCol = 0;
+
+                idleSlots.forEach((resource, i) => {
+                    resource.x = idleX;
+                    resource.y = idleY;
+
+                    idleCol++;
+                    idleX += compressionFactor; // Skip pixels for compression effect
+
+                    if (idleX >= gridWidth) {
+                        idleX = 0;
+                        idleCol = 0;
+                        idleY++;
+                    }
+                });
+            }
+        }
+
         // Color strategy interface
         class ColorStrategy {
             constructor() {
@@ -2824,7 +2889,8 @@
                 new SpiralLayout(),
                 new JobGroupingLayout(),
                 new UserColumnsLayout(),
-                new RadialSunburstLayout()
+                new RadialSunburstLayout(),
+                new IdleCompressionLayout()
             ];
         }
 
@@ -3425,8 +3491,9 @@
             if (digitMatch) {
                 const key = parseInt(digitMatch[1]);
                 if (e.shiftKey) {
-                    // Shift+1-9 for layout modes
-                    switchLayoutMode(key);
+                    // Shift+1-9 for layout modes, Shift+0 = layout 10
+                    const layoutMode = key === 0 ? 10 : key;
+                    switchLayoutMode(layoutMode);
                 } else {
                     // 1-9 for color modes
                     switchColorMode(key);
