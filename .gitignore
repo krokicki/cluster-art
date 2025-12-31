@@ -5,6 +5,7 @@ __pycache__
 
 # Cache
 cache/
+*.log
 
 # Environment
 .env
