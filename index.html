@@ -929,6 +929,10 @@
                     <div class="help-key">SHIFT+8</div>
                     <div class="help-desc">User Rows</div>
                 </div>
+                <div class="help-item">
+                    <div class="help-key">SHIFT+9</div>
+                    <div class="help-desc">Radial Sunburst</div>
+                </div>
             </div>
 
             <div class="help-section">
@@ -1860,6 +1864,122 @@
             }
         }
 
+        // Radial sunburst layout - concentric rings by hierarchy
+        class RadialSunburstLayout extends LayoutStrategy {
+            getName() {
+                return 'RADIAL SUNBURST';
+            }
+
+            layout(resources, gridWidth, gridHeight) {
+                // Center of the sunburst
+                const centerX = Math.floor(gridWidth / 2);
+                const centerY = Math.floor(gridHeight / 2);
+                const maxRadius = Math.min(centerX, centerY) - 1;
+
+                // Group by hardware group -> host -> slots
+                const hwGroups = new Map(); // hwGroup -> Map(host -> resources[])
+
+                resources.forEach(resource => {
+                    const hwGroup = resource.hardwareGroup || 'Unknown';
+                    const host = resource.hostname;
+
+                    if (!hwGroups.has(hwGroup)) {
+                        hwGroups.set(hwGroup, new Map());
+                    }
+                    const hostMap = hwGroups.get(hwGroup);
+                    if (!hostMap.has(host)) {
+                        hostMap.set(host, []);
+                    }
+                    hostMap.get(host).push(resource);
+                });
+
+                // Sort hardware groups by total slot count (largest first)
+                const sortedHwGroups = Array.from(hwGroups.entries())
+                    .map(([name, hostMap]) => {
+                        let totalSlots = 0;
+                        hostMap.forEach(slots => totalSlots += slots.length);
+                        return { name, hostMap, totalSlots };
+                    })
+                    .sort((a, b) => b.totalSlots - a.totalSlots);
+
+                const totalSlots = resources.length;
+
+                // Assign angular spans to each hardware group
+                let currentAngle = -Math.PI / 2; // Start at top
+
+                sortedHwGroups.forEach(hwGroup => {
+                    const groupAngleSpan = (hwGroup.totalSlots / totalSlots) * 2 * Math.PI;
+
+                    // Sort hosts within group by slot count
+                    const sortedHosts = Array.from(hwGroup.hostMap.entries())
+                        .map(([hostname, slots]) => ({ hostname, slots }))
+                        .sort((a, b) => b.slots.length - a.slots.length);
+
+                    // Assign angular spans to each host within the group
+                    let hostAngle = currentAngle;
+
+                    sortedHosts.forEach(({ hostname, slots }) => {
+                        const hostAngleSpan = (slots.length / hwGroup.totalSlots) * groupAngleSpan;
+
+                        // Separate GPUs and CPUs
+                        const gpus = slots.filter(s => s.type === 'gpu');
+                        const cpus = slots.filter(s => s.type === 'cpu');
+
+                        // GPUs in inner ring, CPUs in outer ring
+                        const innerRadius = maxRadius * 0.3;
+                        const outerRadius = maxRadius * 0.95;
+
+                        // Place GPUs in inner portion
+                        if (gpus.length > 0) {
+                            const gpuRadiusStart = innerRadius;
+                            const gpuRadiusEnd = innerRadius + (outerRadius - innerRadius) * 0.4;
+                            this.placeInArc(gpus, hostAngle, hostAngleSpan, gpuRadiusStart, gpuRadiusEnd, centerX, centerY);
+                        }
+
+                        // Place CPUs in outer portion
+                        if (cpus.length > 0) {
+                            const cpuRadiusStart = innerRadius + (outerRadius - innerRadius) * 0.45;
+                            const cpuRadiusEnd = outerRadius;
+                            this.placeInArc(cpus, hostAngle, hostAngleSpan, cpuRadiusStart, cpuRadiusEnd, centerX, centerY);
+                        }
+
+                        hostAngle += hostAngleSpan;
+                    });
+
+                    currentAngle += groupAngleSpan;
+                });
+            }
+
+            placeInArc(slots, startAngle, angleSpan, innerRadius, outerRadius, centerX, centerY) {
+                if (slots.length === 0) return;
+
+                // Calculate how many rings and slots per ring we need
+                const radiusRange = outerRadius - innerRadius;
+                const circumference = 2 * Math.PI * ((innerRadius + outerRadius) / 2) * (angleSpan / (2 * Math.PI));
+
+                // Estimate slots that fit in one ring within our angle span
+                const slotsPerRing = Math.max(1, Math.floor(circumference));
+                const numRings = Math.ceil(slots.length / slotsPerRing);
+                const ringSpacing = numRings > 1 ? radiusRange / (numRings - 1) : 0;
+
+                let slotIndex = 0;
+                for (let ring = 0; ring < numRings && slotIndex < slots.length; ring++) {
+                    const radius = innerRadius + ring * ringSpacing;
+                    const slotsInThisRing = Math.min(slotsPerRing, slots.length - slotIndex);
+                    const angleStep = slotsInThisRing > 1 ? angleSpan / slotsInThisRing : 0;
+                    const angleOffset = slotsInThisRing > 1 ? angleStep / 2 : angleSpan / 2;
+
+                    for (let i = 0; i < slotsInThisRing && slotIndex < slots.length; i++) {
+                        const angle = startAngle + angleOffset + i * angleStep;
+                        const resource = slots[slotIndex];
+                        resource.x = Math.round(centerX + radius * Math.cos(angle));
+                        resource.y = Math.round(centerY + radius * Math.sin(angle));
+                        slotIndex++;
+                    }
+                }
+            }
+        }
+
         // Color strategy interface
         class ColorStrategy {
             constructor() {
@@ -2703,7 +2823,8 @@
                 new HilbertCurveLayout(),
                 new SpiralLayout(),
                 new JobGroupingLayout(),
-                new UserColumnsLayout()
+                new UserColumnsLayout(),
+                new RadialSunburstLayout()
             ];
         }
 
