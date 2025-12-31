@@ -6,8 +6,8 @@ platforms = ["osx-arm64","linux-64"]
 version = "0.1.0"
 
 [tasks]
-serve = "python -m uvicorn app:app --host 0.0.0.0 --port 8000"
-fetch = "python fetch_cache.py"
+serve = "python -m uvicorn cluster_art.app:app --host 0.0.0.0 --port 8000"
+fetch = "python -m cluster_art.fetch_cache"
 
 [dependencies]
 python = ">=3.8"

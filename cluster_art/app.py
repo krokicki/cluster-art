@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from fetch_cache import Settings, get_settings, fetch_and_cache_async, get_cache_path_for_timestamp
+from .fetch_cache import Settings, get_settings, fetch_and_cache_async, get_cache_path_for_timestamp
 
 settings = get_settings()
 
