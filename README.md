@@ -63,6 +63,37 @@ Circular layout with concentric rings organized by hierarchy. Angular segments r
 ### 9. Idle Compression (Shift+9)
 Active slots packed densely at top using full canvas width. Idle slots compressed into a sparser region below with gaps (2x spacing). Emphasizes active usage by making idle resources visually subdued. Clear visual separation between busy and available resources.
 
+## Color Modes
+
+Nine color strategies visualize different attributes of cluster resources. Press L to toggle the legend panel.
+
+### 1. User (Key 1)
+Assigns a distinct color to each active user using evenly-spaced hues around the HSL color wheel. Idle slots appear dark gray (#2a2a2a). Legend shows users sorted by slot count (highest first). Best for seeing who's using what.
+
+### 2. Hostname (Key 2)
+Deterministic hash-based coloring where each hostname maps to a consistent HSL color derived from its string hash. Same hostname always gets the same color across sessions. Useful for tracking specific hosts.
+
+### 3. Row (Key 3)
+Colors slots by rack row prefix (e.g., "h04" from "h04u08"). Uses a curated palette of 20 visually distinct colors (red, green, yellow, blue, orange, purple, cyan, magenta, etc.) cycling for additional rows. Shows physical rack groupings.
+
+### 4. Hardware Group (Key 4)
+Pre-defined colors for hardware configurations like "CPU + T4", "8GPU H200", "4GPU A100", etc. Quickly identifies different hardware tiers and their distribution across the cluster.
+
+### 5. GPU Type (Key 5)
+Distinct color per GPU model (H200, H100, A100, L4, T4, etc.). CPU-only slots get a separate color. Shows GPU diversity and where specific accelerators are located.
+
+### 6. Utilization (Key 6)
+Heat map based on CPU utilization percentage. Blue (0%) → cyan → green → yellow → red (100%). Immediately shows hot spots and underutilized resources.
+
+### 7. Status (Key 7)
+Binary coloring: bright green (#44ff44) for in-use slots, dark gray (#2a2a2a) for idle. Simplest view of cluster occupancy—just busy vs. available.
+
+### 8. Host Status (Key 8)
+Colors by host status string (e.g., "ok", "closed_Full", "closed_Excl"). Each unique status gets a distinct color. Sorted by count in legend. Useful for identifying problematic or reserved hosts.
+
+### 9. Memory Load (Key 9)
+Heat map by available memory (from host load metrics). Red (low/constrained) → yellow → green → cyan → blue (high/available). Inverted from utilization—blue means healthy memory headroom.
+
 ## Configuration
 
 Create a `.env` file to override defaults:
