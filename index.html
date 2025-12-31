@@ -2087,21 +2087,69 @@
             }
         }
 
+        // Persistent cache for user colors (survives across data refreshes)
+        const userColorCache = new Map();
+        let userColorIndex = 0;
+
+        // Pre-generated palette of visually distinct colors
+        const DISTINCT_USER_COLORS = [
+            '#e6194b', // red
+            '#3cb44b', // green
+            '#ffe119', // yellow
+            '#4363d8', // blue
+            '#f58231', // orange
+            '#911eb4', // purple
+            '#42d4f4', // cyan
+            '#f032e6', // magenta
+            '#bfef45', // lime
+            '#fabed4', // pink
+            '#469990', // teal
+            '#dcbeff', // lavender
+            '#9a6324', // brown
+            '#fffac8', // beige
+            '#800000', // maroon
+            '#aaffc3', // mint
+            '#808000', // olive
+            '#ffd8b1', // apricot
+            '#000075', // navy
+            '#a9a9a9', // grey
+            '#e6beff', // light purple
+            '#aa6e28', // chocolate
+            '#00ff00', // lime green
+            '#ff00ff', // fuchsia
+            '#00ffff', // aqua
+            '#ff6347', // tomato
+            '#7b68ee', // medium slate blue
+            '#ffa500', // orange2
+            '#20b2aa', // light sea green
+            '#ff1493', // deep pink
+        ];
+
         // Mode 1: By User
         class UserColorStrategy extends ColorStrategy {
             initialize(resources) {
+                // Only assign colors to new users, keeping existing colors stable
                 const users = resources.map(r => r.user).filter(u => u && u !== '');
                 const uniqueUsers = Array.from(new Set(users));
-                const colors = generateDistinctColors(uniqueUsers.length);
 
-                uniqueUsers.forEach((user, i) => {
-                    this.colorMap.set(user, colors[i]);
+                uniqueUsers.forEach(user => {
+                    if (!userColorCache.has(user)) {
+                        // Assign next distinct color from palette
+                        const color = DISTINCT_USER_COLORS[userColorIndex % DISTINCT_USER_COLORS.length];
+                        userColorCache.set(user, color);
+                        userColorIndex++;
+                    }
+                    this.colorMap.set(user, userColorCache.get(user));
                 });
                 this.colorMap.set(null, '#2a2a2a');
                 this.colorMap.set('', '#2a2a2a');
             }
 
             getColor(resource) {
+                // Check persistent cache first for users not in current colorMap
+                if (resource.user && userColorCache.has(resource.user)) {
+                    return userColorCache.get(resource.user);
+                }
                 return this.colorMap.get(resource.user) || this.colorMap.get(null);
             }
 
@@ -2345,17 +2393,59 @@
             }
         }
 
+        // Persistent cache for host status colors
+        const hostStatusColorCache = new Map();
+        let hostStatusColorIndex = 0;
+
+        // Static colors for known statuses
+        const STATIC_STATUS_COLORS = {
+            'ok': '#44ff44',           // green (same as in-use)
+            'closed_Full': '#e6194b',  // red
+            'closed_Adm': '#f58231',   // orange
+            'closed_Excl': '#911eb4',  // purple
+        };
+
+        // Palette for dynamic status colors
+        const DISTINCT_STATUS_COLORS = [
+            '#4363d8', // blue
+            '#42d4f4', // cyan
+            '#f032e6', // magenta
+            '#ffe119', // yellow
+            '#bfef45', // lime
+            '#fabed4', // pink
+            '#469990', // teal
+            '#dcbeff', // lavender
+            '#9a6324', // brown
+            '#800000', // maroon
+            '#aaffc3', // mint
+            '#808000', // olive
+            '#000075', // navy
+        ];
+
         // Mode 8: By Host Status
         class HostStatusColorStrategy extends ColorStrategy {
             initialize(resources) {
                 const statuses = Array.from(new Set(resources.map(r => r.status)));
-                const colors = generateDistinctColors(statuses.length);
-                statuses.forEach((status, i) => {
-                    this.colorMap.set(status, colors[i]);
+                statuses.forEach(status => {
+                    if (!hostStatusColorCache.has(status)) {
+                        // Check for static color first
+                        if (STATIC_STATUS_COLORS[status]) {
+                            hostStatusColorCache.set(status, STATIC_STATUS_COLORS[status]);
+                        } else {
+                            // Assign next distinct color from palette
+                            const color = DISTINCT_STATUS_COLORS[hostStatusColorIndex % DISTINCT_STATUS_COLORS.length];
+                            hostStatusColorCache.set(status, color);
+                            hostStatusColorIndex++;
+                        }
+                    }
+                    this.colorMap.set(status, hostStatusColorCache.get(status));
                 });
             }
 
             getColor(resource) {
+                if (resource.status && hostStatusColorCache.has(resource.status)) {
+                    return hostStatusColorCache.get(resource.status);
+                }
                 return this.colorMap.get(resource.status) || '#2a2a2a';
             }
 
