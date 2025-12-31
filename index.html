@@ -1009,20 +1009,24 @@
             <div class="help-section">
                 <div class="help-section-title">PANELS</div>
                 <div class="help-item">
-                    <div class="help-key">L</div>
-                    <div class="help-desc">Toggle legend</div>
+                    <div class="help-key">P</div>
+                    <div class="help-desc">Toggle all panels</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-key">?</div>
+                    <div class="help-desc">Toggle this help</div>
                 </div>
                 <div class="help-item">
                     <div class="help-key">T</div>
                     <div class="help-desc">Toggle time travel</div>
                 </div>
                 <div class="help-item">
-                    <div class="help-key">SPACE</div>
-                    <div class="help-desc">Play/pause</div>
+                    <div class="help-key">L</div>
+                    <div class="help-desc">Toggle legend</div>
                 </div>
                 <div class="help-item">
-                    <div class="help-key">?</div>
-                    <div class="help-desc">Toggle this help</div>
+                    <div class="help-key">SPACE</div>
+                    <div class="help-desc">Play/pause</div>
                 </div>
             </div>
         </div>
@@ -3585,6 +3589,30 @@
             saveStateToURL();
         }
 
+        function toggleAllPanels() {
+            // If any panel is open, close all. Otherwise, open all.
+            const anyOpen = legendExpanded || helpExpanded || timeTravelExpanded;
+
+            if (anyOpen) {
+                // Close all
+                legendExpanded = false;
+                helpExpanded = false;
+                timeTravelExpanded = false;
+                legend.classList.remove('expanded');
+                help.classList.remove('expanded');
+                document.getElementById('time-travel').classList.remove('expanded');
+            } else {
+                // Open all
+                legendExpanded = true;
+                helpExpanded = true;
+                timeTravelExpanded = true;
+                legend.classList.add('expanded');
+                help.classList.add('expanded');
+                document.getElementById('time-travel').classList.add('expanded');
+            }
+            saveStateToURL();
+        }
+
         legendTitle.addEventListener('click', toggleLegend);
 
         // Zoom functions
@@ -3722,6 +3750,11 @@
             // T to toggle time travel
             if (e.key === 't' || e.key === 'T') {
                 toggleTimeTravel();
+            }
+
+            // P to toggle all panels
+            if (e.key === 'p' || e.key === 'P') {
+                toggleAllPanels();
             }
 
             // SPACE to play/pause time travel
