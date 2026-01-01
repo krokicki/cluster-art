@@ -56,15 +56,13 @@ The Dockerfile clones the repo from GitHub and builds a specific version tag.
 gcloud auth configure-docker
 
 # Build a specific version (clones from GitHub)
-docker build -t gcr.io/krokicki/cluster-art:v1.0.0 \
-    --build-arg VERSION=v1.0.0 \
-    .
+docker build -t gcr.io/krokicki/cluster-art:1.0.0 --build-arg VERSION=1.0.0 .
 
 # Push to GCR
-docker push gcr.io/krokicki/cluster-art:v1.0.0
+docker push gcr.io/krokicki/cluster-art:1.0.0
 
 # Optionally tag as latest
-docker tag gcr.io/krokicki/cluster-art:v1.0.0 gcr.io/krokicki/cluster-art:latest
+docker tag gcr.io/krokicki/cluster-art:1.0.0 gcr.io/krokicki/cluster-art:latest
 docker push gcr.io/krokicki/cluster-art:latest
 ```
 
