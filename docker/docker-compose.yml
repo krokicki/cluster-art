@@ -9,7 +9,7 @@ services:
       - ${CLUSTER_CACHE_FOLDER:-./cache}:/app/cache:ro
     environment:
       - CLUSTER_FETCH_INTERVAL=999999
-      - CLUSTER_CACHE_FOLDER=/opt/deploy/cluster-art/cache
+      - CLUSTER_CACHE_FOLDER=/app/cache
     env_file:
       - path: .env
         required: false
