@@ -1,15 +1,29 @@
 services:
+
   cluster-art:
-    image: ghcr.io/krokicki/cluster-art:0.1.0
-    container_name: cluster-art
-    restart: unless-stopped
-    ports:
-      - "${PORT:-8080}:8080"
-    volumes:
-      - ${CACHE_FOLDER}:/app/cache:ro
-    environment:
-      - CLUSTER_DISABLE_FETCH=true
-      - CLUSTER_CACHE_FOLDER=/app/cache
-    env_file:
-      - path: .env
-        required: false
+      image: ghcr.io/krokicki/cluster-art:0.1.0
+      container_name: myservice
+      restart: unless-stopped
+      ports:
+        - "${PORT:-8000}:8080"
+      volumes:
+        - ${CACHE_FOLDER}:/app/cache:ro
+      environment:
+        - CLUSTER_DISABLE_FETCH=true
+        - CLUSTER_CACHE_FOLDER=/app/cache
+      env_file:
+        - path: .env
+          required: false
+
+    nginx:
+        image: nginx
+        depends_on:
+          - cluster-art
+        ports:
+          - 9443:443
+        restart: unless-stopped
+        volumes:
+          - ./nginx.conf:/etc/nginx/nginx.conf:ro
+          - ${CERT_FILE}:/certs/default.crt:ro
+          - ${KEY_FILE}:/certs/default.key:ro
+
