@@ -836,6 +836,13 @@ canvas.addEventListener('mouseleave', () => {
 
 canvas.addEventListener('click', (e) => {
   const state = getState();
+
+  // Ignore click if it was a drag (moved more than 5 pixels)
+  const dx = e.clientX - state.interaction.clickStartX;
+  const dy = e.clientY - state.interaction.clickStartY;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  if (distance > 5) return;
+
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
@@ -856,6 +863,12 @@ container?.addEventListener('mousedown', (e) => {
   const store = useStore.getState();
   const state = getState();
   const target = e.target as HTMLElement;
+
+  // Always record click start position
+  store.setInteraction({
+    clickStartX: e.clientX,
+    clickStartY: e.clientY,
+  });
 
   if (target.classList.contains('resize-handle')) {
     store.setInteraction({
