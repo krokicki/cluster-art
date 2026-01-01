@@ -18,8 +18,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from fetch_cache import Settings, get_settings, fetch_and_cache_async, get_cache_path_for_timestamp
+from .fetch_cache import Settings, get_settings, fetch_and_cache_async, get_cache_path_for_timestamp
 
 settings = get_settings()
 
@@ -166,10 +167,19 @@ async def initial_fetch():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle manager for startup and shutdown events"""
+    # Check production mode at runtime
+    _dist_path = Path("dist")
+    _is_production = _dist_path.exists() and (_dist_path / "index.html").exists()
+
     print(f"Configuration:")
+    print(f"  Mode: {'PRODUCTION' if _is_production else 'DEVELOPMENT'}")
     print(f"  Upstream URL: {settings.upstream_url}")
     print(f"  Fetch interval: {settings.fetch_interval}s")
     print(f"  Cache folder: {settings.cache_folder.absolute()}")
+
+    if not _is_production:
+        print(f"\n  Development mode: Use 'pixi run dev' to start Vite dev server")
+        print(f"  Then open http://localhost:5173 for HMR support")
 
     # Startup: perform initial fetch and start background task
     await initial_fetch()
@@ -202,10 +212,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Check if we're in production mode (dist/ exists with built assets)
+dist_path = Path("dist")
+is_production = dist_path.exists() and (dist_path / "index.html").exists()
+
+# Serve static CSS (always from static/css)
+static_path = Path("static")
+if static_path.exists():
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# In production, serve built JS assets from dist/assets
+if is_production:
+    assets_path = dist_path / "assets"
+    if assets_path.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_path)), name="assets")
+
 
 @app.get("/")
 async def index():
-    """Serve the index.html file"""
+    """Serve the index.html file (from dist/ in production, root in dev)"""
+    if is_production:
+        return FileResponse("dist/index.html")
     return FileResponse("index.html")
 
 
