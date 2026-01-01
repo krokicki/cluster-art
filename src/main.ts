@@ -51,7 +51,6 @@ const modalOverlay = document.getElementById('modal-overlay')!;
 let currentResource: IResource | null = null;
 let hoverGridX: number | null = null;
 let hoverGridY: number | null = null;
-let currentResourceIndex = -1;
 
 // Local reference to strategies
 let colorStrategies: ColorStrategy[] = [];
@@ -467,7 +466,9 @@ function createBarGraph(label: string, value: number, max: number): string {
 
 function showModal(resource: IResource): void {
   const state = getState();
-  currentResourceIndex = state.resources.indexOf(resource);
+  const store = useStore.getState();
+  const resourceIndex = state.resources.indexOf(resource);
+  store.setModalIndex(resourceIndex);
 
   const modalTitle = document.getElementById('modal-title');
   const modalStatus = document.getElementById('modal-status');
@@ -562,22 +563,24 @@ function showModal(resource: IResource): void {
 
   modalOverlay.classList.add('visible');
   updateNavigationArrows();
+  store.saveToURL();
 }
 
 function updateNavigationArrows(): void {
   const state = getState();
+  const modalIndex = state.modalIndex;
   const leftArrow = document.getElementById('modal-nav-left');
   const rightArrow = document.getElementById('modal-nav-right');
 
   if (leftArrow) {
-    if (currentResourceIndex > 0) {
+    if (modalIndex > 0) {
       leftArrow.classList.add('visible');
     } else {
       leftArrow.classList.remove('visible');
     }
   }
   if (rightArrow) {
-    if (currentResourceIndex < state.resources.length - 1) {
+    if (modalIndex < state.resources.length - 1) {
       rightArrow.classList.add('visible');
     } else {
       rightArrow.classList.remove('visible');
@@ -587,23 +590,23 @@ function updateNavigationArrows(): void {
 
 function navigateToPrevious(): void {
   const state = getState();
-  if (currentResourceIndex > 0) {
-    currentResourceIndex--;
-    showModal(state.resources[currentResourceIndex]);
+  if (state.modalIndex > 0) {
+    showModal(state.resources[state.modalIndex - 1]);
   }
 }
 
 function navigateToNext(): void {
   const state = getState();
-  if (currentResourceIndex < state.resources.length - 1) {
-    currentResourceIndex++;
-    showModal(state.resources[currentResourceIndex]);
+  if (state.modalIndex < state.resources.length - 1) {
+    showModal(state.resources[state.modalIndex + 1]);
   }
 }
 
 function closeModal(): void {
+  const store = useStore.getState();
   modalOverlay.classList.remove('visible');
-  currentResourceIndex = -1;
+  store.setModalIndex(-1);
+  store.saveToURL();
 
   // Hide navigation arrows
   document.getElementById('modal-nav-left')?.classList.remove('visible');
@@ -768,6 +771,11 @@ async function init(): Promise<void> {
         timetravel.enterTimeTravelMode(currentState.timeTravel.availableTimepoints.timestamps[0], 0);
       }
       timetravel.startPlayback();
+    }
+
+    // Restore modal state from URL
+    if (currentState.modalIndex >= 0 && currentState.modalIndex < currentState.resources.length) {
+      showModal(currentState.resources[currentState.modalIndex]);
     }
 
     store.saveToURL();

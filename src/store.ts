@@ -78,6 +78,9 @@ interface AppState {
   // Hover state
   lastHover: { x: number | null; y: number | null };
 
+  // Modal state (-1 means closed)
+  modalIndex: number;
+
   // Actions
   setCanvas: (canvas: Partial<CanvasState>) => void;
   setZoom: (zoom: number) => void;
@@ -96,6 +99,7 @@ interface AppState {
   setLegendExpanded: (expanded: boolean) => void;
   setHelpExpanded: (expanded: boolean) => void;
   setLastHover: (hover: { x: number | null; y: number | null }) => void;
+  setModalIndex: (index: number) => void;
   saveToURL: () => void;
   loadFromURL: () => boolean;
 }
@@ -151,6 +155,8 @@ export const useStore = createStore<AppState>((set, get) => ({
 
   lastHover: { x: null, y: null },
 
+  modalIndex: -1,
+
   // Actions
   setCanvas: (canvas) => set((state) => ({
     canvas: { ...state.canvas, ...canvas }
@@ -196,6 +202,8 @@ export const useStore = createStore<AppState>((set, get) => ({
 
   setLastHover: (lastHover) => set({ lastHover }),
 
+  setModalIndex: (modalIndex) => set({ modalIndex }),
+
   saveToURL: () => {
     const state = get();
     const urlState: Record<string, string | number> = {
@@ -222,6 +230,10 @@ export const useStore = createStore<AppState>((set, get) => ({
 
     if (state.timeTravel.windowStartDate) {
       urlState.ws = state.timeTravel.windowStartDate;
+    }
+
+    if (state.modalIndex >= 0) {
+      urlState.mi = state.modalIndex;
     }
 
     const hash = Object.entries(urlState)
@@ -296,6 +308,10 @@ export const useStore = createStore<AppState>((set, get) => ({
 
       if (Object.keys(newTimeTravel).length > 0) {
         newState.timeTravel = { ...state.timeTravel, ...newTimeTravel };
+      }
+
+      if (params.has('mi')) {
+        newState.modalIndex = parseInt(params.get('mi')!);
       }
 
       return newState;
