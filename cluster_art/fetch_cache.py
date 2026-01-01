@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     upstream_url: str = "https://cluster-status.int.janelia.org/api/cluster-status"
     fetch_interval: int = 120  # seconds
     cache_folder: Path = Path("cache")
+    disable_fetch: bool = False  # Set to True for read-only cache deployments
 
     model_config = {
         "env_prefix": "CLUSTER_",

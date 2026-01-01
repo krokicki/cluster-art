@@ -4,18 +4,12 @@ services:
     container_name: cluster-art
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"
+      - "${PORT:-8080}:8080"
     volumes:
-      - ${CLUSTER_CACHE_FOLDER:-./cache}:/app/cache:ro
+      - ${CACHE_FOLDER}:/app/cache:ro
     environment:
-      - CLUSTER_FETCH_INTERVAL=999999
+      - CLUSTER_DISABLE_FETCH=true
       - CLUSTER_CACHE_FOLDER=/app/cache
     env_file:
       - path: .env
         required: false
-    healthcheck:
-      test: ["CMD", "pixi", "run", "python", "-c", "import httpx; httpx.get('http://localhost:8000/api/health').raise_for_status()"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s

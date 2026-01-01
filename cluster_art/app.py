@@ -159,7 +159,11 @@ async def initial_fetch():
             except ValueError:
                 pass
 
-    # No valid cache, fetch fresh data
+    # No valid cache, fetch fresh data (unless fetching is disabled)
+    if settings.disable_fetch:
+        print("No cached data found, but fetching is disabled")
+        return
+
     print("No cached data found, performing initial fetch...")
     await fetch_and_cache()
 
@@ -173,26 +177,31 @@ async def lifespan(app: FastAPI):
 
     print(f"Configuration:")
     print(f"  Mode: {'PRODUCTION' if _is_production else 'DEVELOPMENT'}")
-    print(f"  Upstream URL: {settings.upstream_url}")
-    print(f"  Fetch interval: {settings.fetch_interval}s")
+    print(f"  Fetch disabled: {settings.disable_fetch}")
+    if not settings.disable_fetch:
+        print(f"  Upstream URL: {settings.upstream_url}")
+        print(f"  Fetch interval: {settings.fetch_interval}s")
     print(f"  Cache folder: {settings.cache_folder.absolute()}")
 
     if not _is_production:
         print(f"\n  Development mode: Use 'pixi run dev' to start Vite dev server")
         print(f"  Then open http://localhost:5173 for HMR support")
 
-    # Startup: perform initial fetch and start background task
+    # Startup: perform initial fetch and start background task (unless disabled)
     await initial_fetch()
-    task = asyncio.create_task(periodic_fetch())
+    task = None
+    if not settings.disable_fetch:
+        task = asyncio.create_task(periodic_fetch())
 
     yield
 
     # Shutdown: cancel background task
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 # Create FastAPI app with lifespan manager
@@ -241,7 +250,7 @@ async def get_cluster_status():
     """Serve the latest cached cluster status with gzip compression"""
     latest_file = get_latest_cached_file()
 
-    if latest_file is None:
+    if latest_file is None and not settings.disable_fetch:
         # No cache exists, try to fetch now
         await fetch_and_cache()
         latest_file = get_latest_cached_file()
@@ -252,7 +261,7 @@ async def get_cluster_status():
             detail={
                 "error": "Data not available",
                 "last_error": fetch_error,
-                "message": "Could not fetch or load cluster data. Please try again."
+                "message": "No cached data available." if settings.disable_fetch else "Could not fetch or load cluster data. Please try again."
             }
         )
 

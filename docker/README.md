@@ -34,7 +34,7 @@ Edit `.env`:
 | `PORT` | `8000` | Host port to expose |
 | `CLUSTER_CACHE_FOLDER` | `./cache` | Path to cache directory on host |
 
-The container mounts the cache directory as read-only since the crontab handles all cache writes.
+The container runs with `CLUSTER_DISABLE_FETCH=true` and mounts the cache directory as read-only. All cache writes are handled by an external crontab.
 
 ## Crontab Setup (on host)
 
