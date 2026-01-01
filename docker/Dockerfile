@@ -13,8 +13,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Clone repo and checkout version tag
-RUN git clone https://github.com/krokicki/cluster-art.git . && \
-    git checkout ${VERSION}
+RUN git clone --branch $VERSION --depth 1 https://github.com/krokicki/cluster-art.git .
 
 # Install dependencies and build frontend
 RUN pixi install && \
