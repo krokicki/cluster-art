@@ -12,8 +12,8 @@ For production deployments, use Docker with an external crontab handling cache p
 
 ```bash
 # Copy and configure environment
-cp .env.example .env
-# Edit .env to set CLUSTER_CACHE_FOLDER to your cache directory
+cp env.template .env
+# Edit .env to configure ports, cache directory, and TLS certificates
 
 # Start
 docker compose up -d
@@ -31,8 +31,11 @@ Edit `.env`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `8000` | Host port to expose |
-| `CLUSTER_CACHE_FOLDER` | `./cache` | Path to cache directory on host |
+| `SERVICE_PORT` | `8000` | Host port for direct Python service access |
+| `NGINX_PORT` | `9443` | Host port for HTTPS access via Nginx |
+| `CACHE_FOLDER` | - | Path to cache directory on host |
+| `CERT_FILE` | - | Path to TLS certificate |
+| `KEY_FILE` | - | Path to TLS private key |
 
 The container runs with `CLUSTER_DISABLE_FETCH=true` and mounts the cache directory as read-only. All cache writes are handled by an external crontab.
 
