@@ -2,7 +2,7 @@
 authors = ["Konrad Rokicki <krokicki@gmail.com>"]
 channels = ["conda-forge"]
 name = "cluster-viz"
-platforms = ["osx-arm64","linux-64"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "linux-aarch64"]
 
 [tasks]
 serve = "python -m uvicorn cluster_art.app:app --host 0.0.0.0 --port 8000"
