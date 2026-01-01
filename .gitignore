@@ -3,6 +3,11 @@
 *.egg-info
 __pycache__
 
+# Node.js
+node_modules/
+dist/
+*.tsbuildinfo
+
 # Cache
 cache/
 *.log

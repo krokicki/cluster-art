@@ -5,9 +5,14 @@ Artistic HPC cluster visualization with a vintage video game aesthetic. Prioriti
 ## Quick Start
 
 ```bash
-pixi run serve   # Starts server at http://localhost:8000
-pixi run fetch   # Manual fetch (for cron jobs)
+pixi run install  # Install npm dependencies (first time only)
+pixi run dev      # Start Vite dev server with HMR (http://localhost:5173)
+pixi run serve    # Start FastAPI backend (http://localhost:8000)
+pixi run build    # Build TypeScript for production
+pixi run fetch    # Manual fetch (for cron jobs)
 ```
+
+**Important**: Always use `pixi run` for npm/npx commands. Never run npm or npx directly.
 
 ## Project Structure
 
@@ -18,23 +23,31 @@ cluster-art/
 │   ├── app.py             # FastAPI backend
 │   ├── fetch_cache.py     # Data fetching, caching, and settings
 │   └── migrate_cache.py   # Cache migration utility (flat → hierarchical)
-├── static/                # Frontend assets
-│   ├── css/
-│   │   └── styles.css     # Retro CRT styling
-│   └── js/
-│       ├── main.js        # Application entry point
-│       ├── models.js      # Resource class
-│       ├── config.js      # Constants and palettes
-│       ├── layouts.js     # 9 layout strategies
-│       ├── colors.js      # 9 color strategies
-│       ├── state.js       # Global state management
-│       └── timetravel.js  # Historical playback
+├── src/                   # TypeScript source (Vite)
+│   ├── types/
+│   │   ├── api.ts         # API response types
+│   │   ├── domain.ts      # Domain models
+│   │   ├── strategies.ts  # Strategy interfaces
+│   │   └── index.ts       # Type re-exports
+│   ├── store.ts           # Zustand state management
+│   ├── main.ts            # Application entry point
+│   ├── models.ts          # Resource class
+│   ├── config.ts          # Constants and palettes
+│   ├── layouts.ts         # 9 layout strategies
+│   ├── colors.ts          # 9 color strategies
+│   └── timetravel.ts      # Historical playback
+├── static/css/            # CSS styles (bundled by Vite)
+│   └── styles.css         # Retro CRT styling
+├── dist/                  # Production build output (gitignored)
 ├── schemas/               # JSON schema documentation
 │   ├── original.schema.json
 │   └── optimized.schema.json
 ├── cache/                 # Cached gzipped JSON files (gitignored)
 │   └── YYYYMM/DD/<timestamp>.json.gz
-├── index.html             # Frontend SPA shell
+├── index.html             # Frontend SPA shell (Vite entry point)
+├── vite.config.ts         # Vite configuration
+├── tsconfig.json          # TypeScript configuration
+├── package.json           # npm dependencies
 ├── pixi.toml              # Project config and dependencies
 ├── .env                   # Local config overrides (optional, gitignored)
 └── CLAUDE.md              # This file

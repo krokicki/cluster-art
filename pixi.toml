@@ -8,6 +8,10 @@ version = "0.1.0"
 [tasks]
 serve = "python -m uvicorn cluster_art.app:app --host 0.0.0.0 --port 8000"
 fetch = "python -m cluster_art.fetch_cache"
+dev = "npx vite"
+build = "npx vite build"
+install = "npm install"
+typecheck = "npx tsc --noEmit"
 
 [dependencies]
 python = ">=3.8"
@@ -15,3 +19,4 @@ fastapi = ">=0.110.0"
 uvicorn = ">=0.27.0"
 httpx = ">=0.26.0"
 pydantic-settings = ">=2.0.0"
+nodejs = ">=20"

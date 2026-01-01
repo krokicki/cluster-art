@@ -523,7 +523,9 @@ body {
 
 .bar-graph-label {
     color: #ffff00;
-    min-width: 60px;
+    min-width: 80px;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .bar-graph-container {
@@ -542,8 +544,10 @@ body {
 
 .bar-graph-value {
     color: #00ffff;
-    min-width: 60px;
+    min-width: 70px;
+    flex-shrink: 0;
     text-align: right;
+    white-space: nowrap;
 }
 
 .type-icon {
