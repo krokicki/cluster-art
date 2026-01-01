@@ -45,9 +45,5 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD pixi run python -c "import httpx; httpx.get('http://localhost:8000/api/health').raise_for_status()"
-
 # Run server
 CMD ["pixi", "run", "serve"]
