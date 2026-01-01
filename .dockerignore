@@ -1,0 +1,32 @@
+# Dependencies and build artifacts
+node_modules/
+.pixi/
+dist/
+cache/
+
+# Git
+.git/
+.gitignore
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Environment and secrets
+.env
+*.env.local
+
+# Docker
+docker/.env
+
+# Documentation (not needed in container)
+*.md
+schemas/

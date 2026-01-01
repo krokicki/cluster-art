@@ -1,0 +1,15 @@
+services:
+  cluster-art:
+    image: gcr.io/krokicki/cluster-art:1.0.0
+    container_name: cluster-art
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - ${CLUSTER_CACHE_FOLDER:-./cache}:/app/cache:ro
+    environment:
+      - CLUSTER_FETCH_INTERVAL=999999
+      - CLUSTER_CACHE_FOLDER=/opt/deploy/cluster-art/cache
+    env_file:
+      - path: .env
+        required: false

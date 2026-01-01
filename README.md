@@ -134,6 +134,10 @@ When using cron, disable the server's background fetcher by setting a very long 
 CLUSTER_FETCH_INTERVAL=999999
 ```
 
+## Docker Deployment
+
+See [docker/README.md](docker/README.md) for production deployment with Docker and GCR.
+
 ## Requirements
 
 - [Pixi](https://pixi.sh) package manager
