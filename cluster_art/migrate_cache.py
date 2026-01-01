@@ -91,14 +91,19 @@ def migrate_flat_files(cache_folder: Path, dry_run: bool = False) -> tuple[int, 
     return moved, skipped
 
 
-def fix_misplaced_files(cache_folder: Path, dry_run: bool = False) -> tuple[int, int]:
+def fix_misplaced_files(cache_folder: Path, dry_run: bool = False, delete_duplicates: bool = False) -> tuple[int, int, int]:
     """Fix files in wrong directories due to timezone issues.
 
     Files may be in wrong YYYYMM/DD directories if they were created using
     local time instead of UTC. This function moves them to the correct location.
 
+    Args:
+        cache_folder: Root cache directory
+        dry_run: If True, only show what would be done
+        delete_duplicates: If True, delete misplaced files when correct location already exists
+
     Returns:
-        Tuple of (files_fixed, files_skipped)
+        Tuple of (files_fixed, files_skipped, files_deleted)
     """
     # Find all files in subdirectories
     gz_files = list(cache_folder.glob("*/*/*.json.gz"))
@@ -106,11 +111,13 @@ def fix_misplaced_files(cache_folder: Path, dry_run: bool = False) -> tuple[int,
     all_hierarchical = gz_files + json_files
 
     if not all_hierarchical:
-        return 0, 0
+        return 0, 0, 0
 
     fixed = 0
     skipped = 0
+    deleted = 0
     checked = 0
+    has_duplicates = False
 
     for filepath in sorted(all_hierarchical):
         timestamp = get_timestamp_from_path(filepath)
@@ -130,8 +137,17 @@ def fix_misplaced_files(cache_folder: Path, dry_run: bool = False) -> tuple[int,
 
         # File is misplaced
         if correct_path.exists():
-            print(f"  Skipping (target exists): {filepath.relative_to(cache_folder)} -> {correct_path.relative_to(cache_folder)}")
-            skipped += 1
+            has_duplicates = True
+            if delete_duplicates:
+                if dry_run:
+                    print(f"  Would delete (duplicate): {filepath.relative_to(cache_folder)}")
+                else:
+                    filepath.unlink()
+                    print(f"  Deleted (duplicate): {filepath.relative_to(cache_folder)}")
+                deleted += 1
+            else:
+                print(f"  Skipping (target exists): {filepath.relative_to(cache_folder)}")
+                skipped += 1
             continue
 
         if dry_run:
@@ -143,10 +159,13 @@ def fix_misplaced_files(cache_folder: Path, dry_run: bool = False) -> tuple[int,
 
         fixed += 1
 
-    if checked > 0 and fixed == 0 and skipped == 0:
+    if checked > 0 and fixed == 0 and skipped == 0 and deleted == 0:
         print(f"  All {checked} hierarchical files are in correct locations.")
 
-    return fixed, skipped
+    if has_duplicates and not delete_duplicates and skipped > 0:
+        print(f"\n  Hint: Use --delete-duplicates to remove misplaced files that already exist in the correct location.")
+
+    return fixed, skipped, deleted
 
 
 def cleanup_empty_dirs(cache_folder: Path, dry_run: bool = False) -> int:
@@ -174,15 +193,20 @@ def cleanup_empty_dirs(cache_folder: Path, dry_run: bool = False) -> int:
     return removed
 
 
-def migrate_cache(cache_folder: Path, dry_run: bool = False) -> dict:
+def migrate_cache(cache_folder: Path, dry_run: bool = False, delete_duplicates: bool = False) -> dict:
     """Run full cache migration and fix.
+
+    Args:
+        cache_folder: Root cache directory
+        dry_run: If True, only show what would be done
+        delete_duplicates: If True, delete misplaced files when correct location already exists
 
     Returns:
         Dict with counts of operations performed
     """
     if not cache_folder.exists():
         print(f"Cache folder does not exist: {cache_folder}")
-        return {"flat_moved": 0, "flat_skipped": 0, "fixed": 0, "fix_skipped": 0, "dirs_removed": 0}
+        return {"flat_moved": 0, "flat_skipped": 0, "fixed": 0, "fix_skipped": 0, "deleted": 0, "dirs_removed": 0}
 
     # Step 1: Migrate flat files
     print("Step 1: Migrating flat files to hierarchical structure...")
@@ -193,7 +217,7 @@ def migrate_cache(cache_folder: Path, dry_run: bool = False) -> dict:
 
     # Step 2: Fix misplaced hierarchical files
     print("Step 2: Fixing misplaced files (timezone corrections)...")
-    fixed, fix_skipped = fix_misplaced_files(cache_folder, dry_run)
+    fixed, fix_skipped, deleted = fix_misplaced_files(cache_folder, dry_run, delete_duplicates)
     print()
 
     # Step 3: Clean up empty directories
@@ -208,6 +232,7 @@ def migrate_cache(cache_folder: Path, dry_run: bool = False) -> dict:
         "flat_skipped": flat_skipped,
         "fixed": fixed,
         "fix_skipped": fix_skipped,
+        "deleted": deleted,
         "dirs_removed": dirs_removed
     }
 
@@ -228,6 +253,11 @@ def main():
         action="store_true",
         help="Show what would be done without making changes"
     )
+    parser.add_argument(
+        "--delete-duplicates",
+        action="store_true",
+        help="Delete misplaced files that already exist in the correct location"
+    )
     args = parser.parse_args()
 
     cache_folder = args.cache_folder.resolve()
@@ -236,12 +266,13 @@ def main():
         print("(DRY RUN - no changes will be made)")
     print()
 
-    results = migrate_cache(cache_folder, dry_run=args.dry_run)
+    results = migrate_cache(cache_folder, dry_run=args.dry_run, delete_duplicates=args.delete_duplicates)
 
     print("Summary:")
     action = "Would" if args.dry_run else "Did"
     print(f"  {action} move {results['flat_moved']} flat files ({results['flat_skipped']} skipped)")
     print(f"  {action} fix {results['fixed']} misplaced files ({results['fix_skipped']} skipped)")
+    print(f"  {action} delete {results['deleted']} duplicate files")
     print(f"  {action} remove {results['dirs_removed']} empty directories")
 
 
