@@ -12,7 +12,7 @@ Usage:
 import gzip
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -47,8 +47,9 @@ def get_cache_path_for_timestamp(timestamp: int, cache_folder: Path) -> Path:
     """Get the hierarchical cache path for a given unix timestamp.
 
     Returns path in format: <cache_folder>/YYYYMM/DD/<timestamp>.json.gz
+    Uses UTC to ensure consistent paths regardless of local timezone.
     """
-    dt = datetime.fromtimestamp(timestamp)
+    dt = datetime.fromtimestamp(timestamp, timezone.utc)
     year_month = dt.strftime("%Y%m")
     day = dt.strftime("%d")
     return cache_folder / year_month / day / f"{timestamp}.json.gz"
