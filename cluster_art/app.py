@@ -288,20 +288,26 @@ async def get_cluster_status_at(timestamp: int):
         )
 
     # Serve gzipped file directly with Content-Encoding header
+    # Historical snapshots are immutable, so cache aggressively
+    cache_headers = {
+        'Cache-Control': 'public, max-age=31536000, immutable'
+    }
+
     if cache_file.suffix == '.gz':
         with open(cache_file, 'rb') as f:
             content = f.read()
         return Response(
             content=content,
             media_type='application/json',
-            headers={'Content-Encoding': 'gzip'}
+            headers={'Content-Encoding': 'gzip', **cache_headers}
         )
     else:
         with open(cache_file, 'r') as f:
             content = f.read()
         return Response(
             content=content,
-            media_type='application/json'
+            media_type='application/json',
+            headers=cache_headers
         )
 
 

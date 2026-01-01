@@ -1,6 +1,6 @@
 // Time travel functionality for historical playback
 
-import { PRELOAD_BUFFER } from './config';
+import { PRELOAD_BUFFER, SNAPSHOT_CACHE_SIZE } from './config';
 import { useStore, getState } from './store';
 import type { ClusterStatus } from './types/api';
 
@@ -13,6 +13,9 @@ declare const flatpickr: (
 // Callbacks that will be set by main.ts to avoid circular imports
 let onDataLoaded: ((data: ClusterStatus) => void) | null = null;
 let onLoadClusterData: (() => Promise<unknown>) | null = null;
+
+// Track in-flight fetch requests to prevent duplicates
+const pendingFetches = new Map<number, Promise<ClusterStatus | null>>();
 
 export interface TimeTravelCallbacks {
   onDataLoaded: (data: ClusterStatus) => void;
@@ -205,8 +208,8 @@ export async function changeWindowStart(
 
   updateDateDisplay();
 
-  // Clear preloaded cache since window changed
-  store.setTimeTravel({ preloadedSnapshots: new Map() });
+  // Note: We don't clear preloadedSnapshots cache here because timestamps are
+  // globally unique - cached data from other windows is still valid and useful
 
   // Load the first timestamp in new window (enter time travel mode)
   // Skip if returning to LIVE mode
@@ -216,6 +219,38 @@ export async function changeWindowStart(
   }
 
   store.saveToURL();
+}
+
+async function fetchAndCacheSnapshot(timestamp: number): Promise<ClusterStatus | null> {
+  try {
+    const response = await fetch(`/api/cluster-status/${timestamp}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const data: ClusterStatus = await response.json();
+
+    // Cache for potential replay
+    const currentState = getState();
+    const newCache = new Map(currentState.timeTravel.preloadedSnapshots);
+    newCache.set(timestamp, data);
+
+    // Limit cache size (LRU eviction)
+    if (newCache.size > SNAPSHOT_CACHE_SIZE) {
+      const oldestKey = newCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        newCache.delete(oldestKey);
+      }
+    }
+
+    useStore.getState().setTimeTravel({ preloadedSnapshots: newCache });
+    return data;
+  } catch (error) {
+    console.error(`Failed to load data for ${timestamp}:`, error);
+    return null;
+  } finally {
+    // Clean up pending fetch tracker
+    pendingFetches.delete(timestamp);
+  }
 }
 
 export async function loadClusterDataAt(timestamp: number): Promise<boolean> {
@@ -228,33 +263,20 @@ export async function loadClusterDataAt(timestamp: number): Promise<boolean> {
     return true;
   }
 
-  try {
-    const response = await fetch(`/api/cluster-status/${timestamp}`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    const data: ClusterStatus = await response.json();
-
-    // Cache for potential replay
-    const newCache = new Map(state.timeTravel.preloadedSnapshots);
-    newCache.set(timestamp, data);
-
-    // Limit cache size
-    if (newCache.size > 20) {
-      const oldestKey = newCache.keys().next().value;
-      if (oldestKey !== undefined) {
-        newCache.delete(oldestKey);
-      }
-    }
-
-    useStore.getState().setTimeTravel({ preloadedSnapshots: newCache });
-
-    if (onDataLoaded) onDataLoaded(data);
-    return true;
-  } catch (error) {
-    console.error(`Failed to load data for ${timestamp}:`, error);
-    return false;
+  // Check if fetch is already in progress for this timestamp
+  if (pendingFetches.has(timestamp)) {
+    const data = await pendingFetches.get(timestamp)!;
+    if (data && onDataLoaded) onDataLoaded(data);
+    return data !== null;
   }
+
+  // Start new fetch and track it
+  const fetchPromise = fetchAndCacheSnapshot(timestamp);
+  pendingFetches.set(timestamp, fetchPromise);
+
+  const data = await fetchPromise;
+  if (data && onDataLoaded) onDataLoaded(data);
+  return data !== null;
 }
 
 export async function preloadAdjacentSnapshots(centerIndex: number): Promise<void> {
@@ -271,20 +293,17 @@ export async function preloadAdjacentSnapshots(centerIndex: number): Promise<voi
     if (idx < 0 || idx >= timestamps.length) continue;
 
     const ts = timestamps[idx];
-    if (state.timeTravel.preloadedSnapshots.has(ts)) continue;
+    // Skip if already cached or fetch in progress
+    if (state.timeTravel.preloadedSnapshots.has(ts) || pendingFetches.has(ts)) continue;
+
+    // Track this fetch to prevent duplicates
+    const fetchPromise = fetchAndCacheSnapshot(ts);
+    pendingFetches.set(ts, fetchPromise);
 
     preloadPromises.push(
-      fetch(`/api/cluster-status/${ts}`)
-        .then((r) => r.json())
-        .then((data: ClusterStatus) => {
-          const currentState = getState();
-          const newCache = new Map(currentState.timeTravel.preloadedSnapshots);
-          newCache.set(ts, data);
-          useStore.getState().setTimeTravel({ preloadedSnapshots: newCache });
-        })
-        .catch(() => {
-          /* ignore preload failures */
-        })
+      fetchPromise.then(() => {
+        /* result already cached by fetchAndCacheSnapshot */
+      })
     );
   }
 

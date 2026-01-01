@@ -10,6 +10,7 @@ export const MIN_CANVAS_SIZE = 200 as const;
 
 // Time travel
 export const PRELOAD_BUFFER = 3 as const;
+export const SNAPSHOT_CACHE_SIZE = 200 as const;
 
 // Color mode descriptions
 export const MODE_DESCRIPTIONS = [

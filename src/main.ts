@@ -631,14 +631,26 @@ async function refreshData(): Promise<void> {
 function setupTimeTravelEventHandlers(): void {
   document.getElementById('time-travel-title')?.addEventListener('click', timetravel.toggleTimeTravel);
 
+  // Debounce slider input to prevent rapid-fire requests during scrubbing
+  let sliderDebounceTimeout: number | null = null;
   document.getElementById('time-travel-slider')?.addEventListener('input', (e) => {
     const state = getState();
     if (!state.timeTravel.availableTimepoints?.timestamps?.length) return;
-    const index = parseInt((e.target as HTMLInputElement).value);
-    if (index >= 0 && index < state.timeTravel.availableTimepoints.timestamps.length) {
-      const timestamp = state.timeTravel.availableTimepoints.timestamps[index];
-      timetravel.enterTimeTravelMode(timestamp, index);
+
+    // Clear any pending timeout
+    if (sliderDebounceTimeout !== null) {
+      clearTimeout(sliderDebounceTimeout);
     }
+
+    // Debounce by 50ms
+    sliderDebounceTimeout = window.setTimeout(() => {
+      const index = parseInt((e.target as HTMLInputElement).value);
+      if (index >= 0 && index < state.timeTravel.availableTimepoints!.timestamps.length) {
+        const timestamp = state.timeTravel.availableTimepoints!.timestamps[index];
+        timetravel.enterTimeTravelMode(timestamp, index);
+      }
+      sliderDebounceTimeout = null;
+    }, 50);
   });
 
   document.getElementById('time-travel-play')?.addEventListener('click', () => {
