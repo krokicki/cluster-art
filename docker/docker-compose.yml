@@ -1,6 +1,6 @@
 services:
   cluster-art:
-    image: gcr.io/krokicki/cluster-art:0.1.0
+    image: ghcr.io/krokicki/cluster-art:0.1.0
     container_name: cluster-art
     restart: unless-stopped
     ports:

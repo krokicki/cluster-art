@@ -52,18 +52,7 @@ Make sure `CLUSTER_CACHE_FOLDER` in your crontab environment matches the path in
 The Dockerfile clones the repo from GitHub and builds a specific version tag.
 
 ```bash
-# Authenticate with GCR
-gcloud auth configure-docker
-
-# Build a specific version (clones from GitHub)
-docker build -t gcr.io/krokicki/cluster-art:1.0.0 --build-arg VERSION=1.0.0 .
-
-# Push to GCR
-docker push gcr.io/krokicki/cluster-art:1.0.0
-
-# Optionally tag as latest
-docker tag gcr.io/krokicki/cluster-art:1.0.0 gcr.io/krokicki/cluster-art:latest
-docker push gcr.io/krokicki/cluster-art:latest
+cd docker/
+export VERSION=<version>
+docker buildx build --platform linux/amd64,linux/arm64 --build-arg GIT_TAG=$VERSION -t ghcr.io/krokicki/cluster-art:$VERSION -t ghcr.io/krokicki/cluster-art:latest --push .
 ```
-
-The `VERSION` build arg accepts any git ref (tag, branch, or commit SHA).

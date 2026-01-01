@@ -1,11 +1,11 @@
 # Cluster Art production server using Pixi
 # Clones from GitHub and builds a specific version tag
 
-ARG VERSION=1.0.0
+ARG GIT_TAG=1.0.0
 
 FROM ghcr.io/prefix-dev/pixi:latest AS builder
 
-ARG VERSION
+ARG GIT_TAG
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Clone repo and checkout version tag
-RUN git clone --branch $VERSION --depth 1 https://github.com/krokicki/cluster-art.git .
+RUN git clone --branch $GIT_TAG --depth 1 https://github.com/krokicki/cluster-art.git .
 
 # Install dependencies and build frontend
 RUN pixi install && \
