@@ -2,7 +2,8 @@
 
 Artistic HPC cluster visualization with a vintage video game aesthetic.
 
-![Retro CRT style](https://img.shields.io/badge/style-retro%20CRT-00ff00?style=flat-square)
+<img width="3022" height="1720" alt="Screenshot 2025-12-31 at 12-43-35 Cluster Resource Visualization" src="https://github.com/user-attachments/assets/56adb541-1079-492a-882a-78d666a56a2f" />
+
 
 ## Quick Start
 
