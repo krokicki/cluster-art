@@ -127,7 +127,7 @@ export const useStore = createStore<AppState>((set, get) => ({
     timestamp: null,
     playing: false,
     playOnLoad: false,
-    speed: 10000,
+    speed: 1000,
     expanded: false,
     currentIndex: 0,
     availableTimepoints: null,
