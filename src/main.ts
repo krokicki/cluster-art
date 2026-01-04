@@ -445,6 +445,20 @@ function toggleAllPanels(): void {
   store.saveToURL();
 }
 
+function toggleUI(): void {
+  const store = useStore.getState();
+  const state = getState();
+  const newHidden = !state.uiHidden;
+
+  store.setUiHidden(newHidden);
+
+  if (newHidden) {
+    document.body.classList.add('ui-hidden');
+  } else {
+    document.body.classList.remove('ui-hidden');
+  }
+}
+
 // Zoom functions
 function zoomIn(): void {
   const store = useStore.getState();
@@ -1044,6 +1058,7 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === '?') toggleHelp();
   else if (e.key === 't' || e.key === 'T') timetravel.toggleTimeTravel();
   else if (e.key === 'p' || e.key === 'P') toggleAllPanels();
+  else if (e.key === 'h') toggleUI();
   else if (e.key === ' ') {
     e.preventDefault();
     const state = getState();
@@ -1082,6 +1097,9 @@ modalOverlay.addEventListener('click', (e) => {
 });
 document.getElementById('modal-nav-left')?.addEventListener('click', navigateToPrevious);
 document.getElementById('modal-nav-right')?.addEventListener('click', navigateToNext);
+
+// UI exit button
+document.getElementById('ui-exit-button')?.addEventListener('click', toggleUI);
 
 // Scroll wheel zoom
 canvas.addEventListener(

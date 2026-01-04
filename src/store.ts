@@ -74,6 +74,7 @@ interface AppState {
   // UI panels
   legendExpanded: boolean;
   helpExpanded: boolean;
+  uiHidden: boolean;
 
   // Hover state
   lastHover: { x: number | null; y: number | null };
@@ -98,6 +99,7 @@ interface AppState {
   setLayoutStrategies: (strategies: LayoutStrategy[]) => void;
   setLegendExpanded: (expanded: boolean) => void;
   setHelpExpanded: (expanded: boolean) => void;
+  setUiHidden: (hidden: boolean) => void;
   setLastHover: (hover: { x: number | null; y: number | null }) => void;
   setModalIndex: (index: number) => void;
   saveToURL: () => void;
@@ -152,6 +154,7 @@ export const useStore = createStore<AppState>((set, get) => ({
 
   legendExpanded: false,
   helpExpanded: false,
+  uiHidden: false,
 
   lastHover: { x: null, y: null },
 
@@ -199,6 +202,8 @@ export const useStore = createStore<AppState>((set, get) => ({
   setLegendExpanded: (legendExpanded) => set({ legendExpanded }),
 
   setHelpExpanded: (helpExpanded) => set({ helpExpanded }),
+
+  setUiHidden: (uiHidden) => set({ uiHidden }),
 
   setLastHover: (lastHover) => set({ lastHover }),
 

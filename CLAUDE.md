@@ -374,6 +374,7 @@ JSON Schema files are available in `schemas/`:
 | L | Toggle legend panel |
 | T | Toggle time travel panel |
 | P | Toggle all panels |
+| H | Hide UI (canvas only mode) |
 | ? | Toggle help panel |
 | Space | Play/pause time travel playback |
 

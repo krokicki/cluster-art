@@ -1024,3 +1024,51 @@ body {
     color: #00ffff;
     text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
 }
+
+/* Hide UI mode */
+body.ui-hidden #help,
+body.ui-hidden #legend,
+body.ui-hidden #time-travel,
+body.ui-hidden #zoom-controls,
+body.ui-hidden #tooltip,
+body.ui-hidden .resize-handle {
+    display: none !important;
+}
+
+body.ui-hidden #canvas-container::after {
+    border-color: transparent;
+}
+
+body.ui-hidden #canvas-container {
+    box-shadow: none;
+}
+
+/* Exit button for hidden UI mode */
+#ui-exit-button {
+    position: fixed;
+    bottom: 12px;
+    right: 12px;
+    width: 28px;
+    height: 28px;
+    background: rgba(26, 26, 46, 0.6);
+    border: 2px solid rgba(0, 255, 0, 0.3);
+    color: rgba(0, 255, 0, 0.5);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    transition: all 0.2s;
+}
+
+#ui-exit-button:hover {
+    background: rgba(0, 255, 0, 0.8);
+    border-color: #00ff00;
+    color: #1a1a2e;
+}
+
+body.ui-hidden #ui-exit-button {
+    display: flex;
+}
