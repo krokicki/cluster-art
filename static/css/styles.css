@@ -303,6 +303,22 @@ body {
     color: #00ff00;
 }
 
+.help-footer {
+    text-align: center;
+    padding: 16px;
+    border-top: 2px solid #00ff00;
+}
+
+.help-footer a {
+    color: #00ffff;
+    text-decoration: none;
+}
+
+.help-footer a:hover {
+    color: #ffff00;
+    text-decoration: underline;
+}
+
 #legend-title {
     color: #ffff00;
     text-align: center;
