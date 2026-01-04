@@ -687,27 +687,94 @@ async function refreshData(): Promise<void> {
 function setupTimeTravelEventHandlers(): void {
   document.getElementById('time-travel-title')?.addEventListener('click', timetravel.toggleTimeTravel);
 
-  // Debounce slider input to prevent rapid-fire requests during scrubbing
-  let sliderDebounceTimeout: number | null = null;
-  document.getElementById('time-travel-slider')?.addEventListener('input', (e) => {
-    const state = getState();
-    if (!state.timeTravel.availableTimepoints?.timestamps?.length) return;
+  // Track slider dragging state to prevent external updates while scrubbing
+  let sliderDragging = false;
+  let wasPlayingBeforeScrub = false;
+  let scrubDebounceTimeout: number | null = null;
+  const slider = document.getElementById('time-travel-slider') as HTMLInputElement;
 
-    // Clear any pending timeout
-    if (sliderDebounceTimeout !== null) {
-      clearTimeout(sliderDebounceTimeout);
-    }
+  if (slider) {
+    // Stop playback and mark dragging on mousedown
+    slider.addEventListener('mousedown', () => {
+      const state = getState();
+      wasPlayingBeforeScrub = state.timeTravel.playing;
+      sliderDragging = true;
+      timetravel.stopPlayback();
+    });
 
-    // Debounce by 50ms
-    sliderDebounceTimeout = window.setTimeout(() => {
-      const index = parseInt((e.target as HTMLInputElement).value);
-      if (index >= 0 && index < state.timeTravel.availableTimepoints!.timestamps.length) {
-        const timestamp = state.timeTravel.availableTimepoints!.timestamps[index];
-        timetravel.enterTimeTravelMode(timestamp, index);
+    // Update display and load data with debounce while dragging
+    slider.addEventListener('input', () => {
+      const state = getState();
+      if (!state.timeTravel.availableTimepoints?.timestamps?.length) return;
+
+      const index = parseInt(slider.value);
+      if (index >= 0 && index < state.timeTravel.availableTimepoints.timestamps.length) {
+        const timestamp = state.timeTravel.availableTimepoints.timestamps[index];
+        // Update store state for display immediately
+        const store = useStore.getState();
+        store.setTimeTravel({
+          mode: true,
+          timestamp: timestamp,
+          currentIndex: index,
+        });
+        timetravel.updateTimeTravelDisplay();
+
+        // Debounce data loading while scrubbing (150ms delay)
+        if (scrubDebounceTimeout !== null) {
+          clearTimeout(scrubDebounceTimeout);
+        }
+        scrubDebounceTimeout = window.setTimeout(() => {
+          timetravel.loadClusterDataAt(timestamp);
+          scrubDebounceTimeout = null;
+        }, 150);
       }
-      sliderDebounceTimeout = null;
-    }, 50);
-  });
+    });
+
+    // Load data immediately when user releases the slider
+    slider.addEventListener('mouseup', () => {
+      sliderDragging = false;
+      // Cancel pending debounce and load immediately
+      if (scrubDebounceTimeout !== null) {
+        clearTimeout(scrubDebounceTimeout);
+        scrubDebounceTimeout = null;
+      }
+      const state = getState();
+      if (!state.timeTravel.availableTimepoints?.timestamps?.length) return;
+
+      const index = parseInt(slider.value);
+      if (index >= 0 && index < state.timeTravel.availableTimepoints.timestamps.length) {
+        const timestamp = state.timeTravel.availableTimepoints.timestamps[index];
+        timetravel.enterTimeTravelMode(timestamp, index);
+        // Resume playback if it was playing before scrub
+        if (wasPlayingBeforeScrub) {
+          timetravel.startPlayback();
+        }
+      }
+    });
+
+    // Handle case where mouse is released outside the slider
+    document.addEventListener('mouseup', () => {
+      if (sliderDragging) {
+        sliderDragging = false;
+        if (scrubDebounceTimeout !== null) {
+          clearTimeout(scrubDebounceTimeout);
+          scrubDebounceTimeout = null;
+        }
+        const state = getState();
+        if (!state.timeTravel.availableTimepoints?.timestamps?.length) return;
+
+        const index = parseInt(slider.value);
+        if (index >= 0 && index < state.timeTravel.availableTimepoints.timestamps.length) {
+          const timestamp = state.timeTravel.availableTimepoints.timestamps[index];
+          timetravel.enterTimeTravelMode(timestamp, index);
+          // Resume playback if it was playing before scrub
+          if (wasPlayingBeforeScrub) {
+            timetravel.startPlayback();
+          }
+        }
+      }
+    });
+  }
 
   document.getElementById('time-travel-play')?.addEventListener('click', () => {
     const state = getState();
