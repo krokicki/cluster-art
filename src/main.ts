@@ -718,10 +718,61 @@ function setupTimeTravelEventHandlers(): void {
     }
   });
 
-  document.getElementById('time-travel-speed')?.addEventListener('change', (e) => {
-    const store = useStore.getState();
-    store.setTimeTravel({ speed: parseFloat((e.target as HTMLSelectElement).value) });
-    store.saveToURL();
+  // Custom dropdown for speed
+  const speedDropdown = document.getElementById('time-travel-speed');
+  const speedToggle = speedDropdown?.querySelector('.dropdown-toggle') as HTMLElement;
+  const speedMenu = speedDropdown?.querySelector('.dropdown-menu') as HTMLElement;
+  const timeTravel = document.getElementById('time-travel');
+  const timeTravelContent = document.getElementById('time-travel-content');
+
+  if (speedToggle) {
+    speedToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = speedDropdown?.classList.toggle('open');
+
+      // Allow overflow when dropdown is open
+      if (isOpen) {
+        if (timeTravel) timeTravel.style.overflow = 'visible';
+        if (timeTravelContent) timeTravelContent.style.overflow = 'visible';
+      } else {
+        if (timeTravel) timeTravel.style.overflow = '';
+        if (timeTravelContent) timeTravelContent.style.overflow = '';
+      }
+    });
+  }
+
+  if (speedMenu) {
+    speedMenu.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('dropdown-item')) {
+        const value = target.dataset.value;
+        if (value) {
+          const store = useStore.getState();
+          store.setTimeTravel({ speed: parseFloat(value) });
+          store.saveToURL();
+
+          if (speedToggle) {
+            speedToggle.textContent = target.textContent;
+          }
+          speedMenu.querySelectorAll('.dropdown-item').forEach((item) => {
+            item.classList.remove('selected');
+          });
+          target.classList.add('selected');
+        }
+        speedDropdown?.classList.remove('open');
+        if (timeTravel) timeTravel.style.overflow = '';
+        if (timeTravelContent) timeTravelContent.style.overflow = '';
+      }
+    });
+  }
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (speedDropdown?.classList.contains('open') && !speedDropdown.contains(e.target as Node)) {
+      speedDropdown.classList.remove('open');
+      if (timeTravel) timeTravel.style.overflow = '';
+      if (timeTravelContent) timeTravelContent.style.overflow = '';
+    }
   });
 
   document.getElementById('time-travel-live')?.addEventListener('click', timetravel.returnToLive);
@@ -774,9 +825,21 @@ async function init(): Promise<void> {
 
     await timetravel.initTimeTravel();
 
-    const speedSelect = document.getElementById('time-travel-speed') as HTMLSelectElement;
-    if (speedSelect) {
-      speedSelect.value = String(getState().timeTravel.speed);
+    // Restore speed dropdown state
+    const speedDropdown = document.getElementById('time-travel-speed');
+    const currentSpeed = getState().timeTravel.speed;
+    if (speedDropdown) {
+      const selectedItem = speedDropdown.querySelector(`.dropdown-item[data-value="${currentSpeed}"]`);
+      if (selectedItem) {
+        const toggle = speedDropdown.querySelector('.dropdown-toggle');
+        if (toggle) {
+          toggle.textContent = selectedItem.textContent;
+        }
+        speedDropdown.querySelectorAll('.dropdown-item').forEach((item) => {
+          item.classList.remove('selected');
+        });
+        selectedItem.classList.add('selected');
+      }
     }
 
     const currentState = getState();

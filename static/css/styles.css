@@ -800,19 +800,68 @@ body {
     50% { opacity: 0.7; }
 }
 
-#time-travel-speed {
+/* Custom dropdown */
+.custom-dropdown {
+    position: relative;
+}
+
+.custom-dropdown .dropdown-toggle {
     height: 40px;
     background: #1a1a2e;
     border: 2px solid #00ff00;
     color: #00ff00;
     font-family: 'Press Start 2P', monospace;
     font-size: 8px;
-    padding: 0 8px;
+    padding: 0 12px;
     cursor: pointer;
+    box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
-#time-travel-speed option {
+.custom-dropdown .dropdown-toggle::after {
+    content: '▼';
+    font-size: 6px;
+}
+
+.custom-dropdown .dropdown-toggle:hover {
+    background: #00ff00;
+    color: #1a1a2e;
+}
+
+.custom-dropdown .dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
     background: #1a1a2e;
+    border: 2px solid #00ff00;
+    box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.8);
+    z-index: 10000;
+    min-width: 100%;
+}
+
+.custom-dropdown.open .dropdown-menu {
+    display: block;
+}
+
+.custom-dropdown .dropdown-item {
+    padding: 10px 12px;
+    color: #00ff00;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.custom-dropdown .dropdown-item:hover {
+    background: #00ff00;
+    color: #1a1a2e;
+}
+
+.custom-dropdown .dropdown-item.selected {
+    color: #ffff00;
 }
 
 /* Date picker row */

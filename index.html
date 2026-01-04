@@ -167,14 +167,17 @@
                 <button id="time-travel-prev" class="time-travel-button" title="Previous snapshot">|&lt;</button>
                 <button id="time-travel-play" class="time-travel-button" title="Play/Pause">&#9654;</button>
                 <button id="time-travel-next" class="time-travel-button" title="Next snapshot">&gt;|</button>
-                <select id="time-travel-speed">
-                    <option value="100">Slowest</option>
-                    <option value="1000">Slower</option>
-                    <option value="10000" selected>Normal</option>
-                    <option value="100000">Fast</option>
-                    <option value="1000000">Faster</option>
-                    <option value="10000000">Fastest</option>
-                </select>
+                <div id="time-travel-speed" class="custom-dropdown">
+                    <button class="dropdown-toggle" type="button">Normal</button>
+                    <div class="dropdown-menu">
+                        <div class="dropdown-item" data-value="100">Slowest</div>
+                        <div class="dropdown-item" data-value="1000">Slower</div>
+                        <div class="dropdown-item selected" data-value="10000">Normal</div>
+                        <div class="dropdown-item" data-value="100000">Fast</div>
+                        <div class="dropdown-item" data-value="1000000">Faster</div>
+                        <div class="dropdown-item" data-value="10000000">Fastest</div>
+                    </div>
+                </div>
                 <button id="time-travel-live" class="time-travel-button time-travel-live active" title="Return to LIVE">LIVE</button>
             </div>
         </div>
