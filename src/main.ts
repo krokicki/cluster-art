@@ -46,11 +46,13 @@ const tooltip = document.getElementById('tooltip')!;
 const help = document.getElementById('help')!;
 const legend = document.getElementById('legend')!;
 const modalOverlay = document.getElementById('modal-overlay')!;
+const modeToast = document.getElementById('mode-toast')!;
 
 // Local UI state
 let currentResource: IResource | null = null;
 let hoverGridX: number | null = null;
 let hoverGridY: number | null = null;
+let toastTimeout: number | null = null;
 
 // Local reference to strategies
 let colorStrategies: ColorStrategy[] = [];
@@ -196,6 +198,21 @@ function updateCurrentLayoutDisplay(): void {
   }
 }
 
+// Show toast notification
+function showToast(label: string, value: string): void {
+  if (toastTimeout !== null) {
+    clearTimeout(toastTimeout);
+  }
+
+  modeToast.innerHTML = `<span class="toast-label">${label}</span><span class="toast-value">${value}</span>`;
+  modeToast.classList.add('visible');
+
+  toastTimeout = window.setTimeout(() => {
+    modeToast.classList.remove('visible');
+    toastTimeout = null;
+  }, 1500);
+}
+
 // Switch layout mode
 function switchLayoutMode(mode: number): void {
   if (mode >= 1 && mode <= layoutStrategies.length) {
@@ -204,6 +221,8 @@ function switchLayoutMode(mode: number): void {
     updateCurrentLayoutDisplay();
     reflowLayout();
     store.saveToURL();
+    const strategy = layoutStrategies[mode - 1];
+    showToast('LAYOUT', strategy.getName());
   }
 }
 
@@ -368,6 +387,7 @@ function switchColorMode(mode: number): void {
     populateLegend();
     draw();
     store.saveToURL();
+    showToast('COLOR', MODE_DESCRIPTIONS[mode - 1]);
   }
 }
 
