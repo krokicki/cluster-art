@@ -454,10 +454,32 @@ function toggleUI(): void {
 
   if (newHidden) {
     document.body.classList.add('ui-hidden');
+    // Request fullscreen
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {
+        // Fullscreen request may fail (e.g., not triggered by user gesture)
+      });
+    }
   } else {
     document.body.classList.remove('ui-hidden');
+    // Exit fullscreen
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
   }
 }
+
+// Sync UI state when user exits fullscreen via Escape or browser controls
+document.addEventListener('fullscreenchange', () => {
+  const store = useStore.getState();
+  const state = getState();
+
+  // If we exited fullscreen but UI is still hidden, restore UI
+  if (!document.fullscreenElement && state.uiHidden) {
+    store.setUiHidden(false);
+    document.body.classList.remove('ui-hidden');
+  }
+});
 
 // Zoom functions
 function zoomIn(): void {
