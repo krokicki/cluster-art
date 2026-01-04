@@ -139,6 +139,28 @@ CLUSTER_FETCH_INTERVAL=999999
 
 See [docker/README.md](docker/README.md) for production deployment with Docker and GCR.
 
-## Requirements
+## Development
 
-- [Pixi](https://pixi.sh) package manager
+### Setup
+
+```bash
+pixi run install  # Install npm dependencies (first time only)
+pixi run dev      # Start Vite dev server with HMR (http://localhost:5173)
+pixi run serve    # Start FastAPI backend (http://localhost:8000)
+pixi run build    # Build TypeScript for production
+```
+
+**Note**: Always use `pixi run` for npm/npx commands. Never run npm or npx directly.
+
+``
+
+### API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /` | Serves index.html |
+| `GET /api/cluster-status` | Latest cached cluster data |
+| `GET /api/cluster-status/{timestamp}` | Data at/near given unix timestamp |
+| `GET /api/health` | Health check with cache info |
+| `GET /api/timepoints` | Available timestamps for time travel |
+
