@@ -670,6 +670,25 @@ body {
     color: #1a1a2e;
 }
 
+/* Playing indicator on title bar */
+#time-travel.playing #time-travel-title::before {
+    content: '▶ ';
+    color: #00ff00;
+    font-size: 12px;
+    position: relative;
+    top: -2px;
+    animation: blink 0.8s ease-in-out infinite;
+}
+
+#time-travel.playing #time-travel-title:hover::before {
+    color: #1a1a2e;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
 #time-travel-content {
     max-height: 0;
     overflow: hidden;

@@ -326,6 +326,11 @@ export function startPlayback(): void {
     playBtn.classList.add('active');
   }
 
+  const panel = document.getElementById('time-travel');
+  if (panel) {
+    panel.classList.add('playing');
+  }
+
   store.saveToURL();
   playbackLoop();
 }
@@ -345,6 +350,11 @@ export function stopPlayback(): void {
   if (playBtn) {
     playBtn.innerHTML = '&#9654;';
     playBtn.classList.remove('active');
+  }
+
+  const panel = document.getElementById('time-travel');
+  if (panel) {
+    panel.classList.remove('playing');
   }
 
   store.saveToURL();
