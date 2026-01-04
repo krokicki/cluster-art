@@ -628,7 +628,7 @@ body {
     top: 20px;
     left: 50%;
     transform: translateX(-50%);
-    width: 180px;
+    width: 200px;
     background: #1a1a2e;
     border: 4px solid #00ff00;
     box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
@@ -653,6 +653,7 @@ body {
     user-select: none;
     transition: all 0.2s;
     white-space: nowrap;
+    position: relative;
 }
 
 #time-travel-title:hover {
@@ -672,11 +673,13 @@ body {
 
 /* Playing indicator on title bar */
 #time-travel.playing #time-travel-title::before {
-    content: '▶ ';
+    content: '▶';
     color: #00ff00;
-    font-size: 12px;
-    position: relative;
-    top: -2px;
+    font-size: 14px;
+    position: absolute;
+    left: calc(50% - 85px);
+    top: 50%;
+    transform: translateY(calc(-50% - 2px));
     animation: blink 0.8s ease-in-out infinite;
 }
 
