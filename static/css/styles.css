@@ -1030,9 +1030,24 @@ body.ui-hidden #help,
 body.ui-hidden #legend,
 body.ui-hidden #time-travel,
 body.ui-hidden #zoom-controls,
-body.ui-hidden #tooltip,
-body.ui-hidden .resize-handle {
+body.ui-hidden #tooltip {
     display: none !important;
+}
+
+/* Resize handles in fullscreen - hidden by default, show on hover */
+body.ui-hidden .resize-handle {
+    opacity: 0;
+    background: rgba(0, 255, 0, 0.3);
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+body.ui-hidden #canvas-container:hover .resize-handle {
+    opacity: 0.5;
+}
+
+body.ui-hidden .resize-handle:hover {
+    opacity: 1 !important;
+    background: rgba(0, 255, 0, 0.8);
 }
 
 body.ui-hidden #canvas-container::after {
